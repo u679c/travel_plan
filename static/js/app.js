@@ -486,6 +486,7 @@ new window.Vue({
             const timelineScale = document.getElementById('timeline-scale');
             const timelineDayBlocks = document.getElementById('timeline-day-blocks');
             const timelineDateBand = document.getElementById('timeline-date-band');
+            const timelineWrap = timelineTrack ? timelineTrack.closest('.timeline-wrap') : null;
             if (!timelineTrack || !timelineEvents || !timelineDayLines || !timelineScale || !timelineDateBand || !timelineDayBlocks) return;
 
             timelineEvents.innerHTML = '';
@@ -493,6 +494,10 @@ new window.Vue({
             timelineDayLines.innerHTML = '';
             timelineDayBlocks.innerHTML = '';
             timelineDateBand.innerHTML = '';
+            if (timelineWrap) {
+                timelineWrap.style.setProperty('--timeline-margin-top', '25px');
+                timelineWrap.style.setProperty('--timeline-margin-bottom', '25px');
+            }
 
             if (!this.currentPlan) return;
 
@@ -558,6 +563,7 @@ new window.Vue({
                 timelineScale.appendChild(tick);
             }
 
+            const visibleItems = [];
             items.forEach((item) => {
                 if (item.item_type === 'address') return;
 
@@ -574,10 +580,92 @@ new window.Vue({
                 const center = left + width / 2;
                 const clampedCenter = Math.max(7, Math.min(center, 93));
 
+                visibleItems.push({
+                    item,
+                    left,
+                    width,
+                    clampedCenter,
+                    clipStart,
+                    clipEnd,
+                    lane: 0,
+                });
+            });
+
+            visibleItems.sort((a, b) => a.clipStart - b.clipStart);
+            const laneEnds = [];
+            visibleItems.forEach((entry) => {
+                let assignedLane = -1;
+                for (let i = 0; i < laneEnds.length; i += 1) {
+                    if (entry.clipStart >= laneEnds[i]) {
+                        assignedLane = i;
+                        break;
+                    }
+                }
+                if (assignedLane === -1) {
+                    laneEnds.push(-Infinity);
+                    assignedLane = laneEnds.length - 1;
+                }
+                entry.lane = assignedLane;
+                laneEnds[assignedLane] = Math.max(laneEnds[assignedLane], entry.clipEnd);
+            });
+
+            const laneCount = Math.max(1, laneEnds.length);
+            const hasMultipleLanes = laneCount > 1;
+            const chipHeight = 10;
+            const laneGap = 4;
+            const trackPaddingTop = 4;
+            const trackPaddingBottom = 4;
+            const trackHeight = Math.max(
+                20,
+                trackPaddingTop + laneCount * chipHeight + (laneCount - 1) * laneGap + trackPaddingBottom,
+            );
+            const chipTopForLane = (lane) => {
+                if (!hasMultipleLanes) return Math.round((trackHeight - chipHeight) / 2);
+                return trackPaddingTop + lane * (chipHeight + laneGap);
+            };
+            timelineTrack.style.height = `${trackHeight}px`;
+            const trackWidthPx = Math.max(1, timelineTrack.clientWidth || timelineTrack.getBoundingClientRect().width || 1);
+            const placed = { above: [], below: [] };
+            let maxAboveClearance = 0;
+            let maxBelowClearance = 0;
+            const overlaps = (a, b) => !(a.x2 < b.x1 || a.x1 > b.x2);
+            const findAnnotationPlacement = (preferredSide, anchorCenter, labelText) => {
+                const textLen = (labelText || '').length;
+                const estWidthPx = Math.max(84, Math.min(220, 20 + textLen * 14));
+                const widthPct = (estWidthPx / trackWidthPx) * 100;
+                const maxLevels = Math.max(12, visibleItems.length + 4);
+                const trySide = (side) => {
+                    for (let level = 0; level < maxLevels; level += 1) {
+                        const box = { x1: anchorCenter - widthPct / 2, x2: anchorCenter + widthPct / 2, level };
+                        const conflict = placed[side].some((p) => p.level === level && overlaps(box, p));
+                        if (!conflict) {
+                            placed[side].push(box);
+                            return { side, level };
+                        }
+                    }
+                    return null;
+                };
+
+                const first = trySide(preferredSide);
+                if (first) return first;
+                const second = trySide(preferredSide === 'above' ? 'below' : 'above');
+                if (second) return second;
+                return { side: preferredSide, level: 0 };
+            };
+
+            visibleItems.forEach((entry, idx) => {
+                const { item, left, width, clampedCenter, lane } = entry;
+                const chipTop = chipTopForLane(lane);
+                const laneCenter = (laneCount - 1) / 2;
+                const laneDistanceToCenter = Math.abs(lane - laneCenter);
+                const maxDistance = Math.max(0.5, laneCenter);
+                const centerAffinity = Math.max(0, 1 - laneDistanceToCenter / maxDistance); // 0=outer, 1=center
                 const chip = document.createElement('div');
                 chip.className = `timeline-event-chip chip-${item.item_type}`;
                 chip.style.left = `${left}%`;
                 chip.style.width = `${width}%`;
+                chip.style.top = `${chipTop}px`;
+                chip.style.height = `${chipHeight}px`;
                 timelineEvents.appendChild(chip);
 
                 const labelText = this.buildItemLabel(item);
@@ -590,9 +678,22 @@ new window.Vue({
                 if (item.note) detail += ` <br/>备注： ${item.note}`;
 
                 const annotation = document.createElement('div');
-                const lane = timelineEvents.querySelectorAll('.timeline-annotation').length % 2 === 0 ? 'above' : 'below';
-                annotation.className = `timeline-annotation ${lane}`;
+                let preferredSide = idx % 2 === 0 ? 'above' : 'below';
+                if (hasMultipleLanes) {
+                    if (lane < laneCenter) preferredSide = 'above';
+                    else if (lane > laneCenter) preferredSide = 'below';
+                }
+                const placement = findAnnotationPlacement(preferredSide, clampedCenter, labelText);
+                const baseConnector = 12 + Math.round(centerAffinity * 22); // outer short, center long
+                const connectorLength = baseConnector + placement.level * 8;
+                const labelClearance = connectorLength + 34;
+                if (placement.side === 'above') maxAboveClearance = Math.max(maxAboveClearance, labelClearance);
+                else maxBelowClearance = Math.max(maxBelowClearance, labelClearance);
+
+                annotation.className = `timeline-annotation ${placement.side}`;
                 annotation.style.left = `${clampedCenter}%`;
+                annotation.style.top = `${chipTop + Math.round(chipHeight / 2)}px`;
+                annotation.style.setProperty('--connector-length', `${connectorLength}px`);
                 annotation.innerHTML = `
                     <div class="timeline-connector"></div>
                     <div class="timeline-label">${labelText}</div>
@@ -600,6 +701,13 @@ new window.Vue({
                 `;
                 timelineEvents.appendChild(annotation);
             });
+
+            if (timelineWrap) {
+                const topMargin = Math.max(25, Math.ceil(maxAboveClearance + 6));
+                const bottomMargin = Math.max(25, Math.ceil(maxBelowClearance + 6));
+                timelineWrap.style.setProperty('--timeline-margin-top', `${topMargin}px`);
+                timelineWrap.style.setProperty('--timeline-margin-bottom', `${bottomMargin}px`);
+            }
         },
     },
     mounted() {

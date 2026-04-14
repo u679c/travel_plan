@@ -254,7 +254,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 
 .timeline-wrap {
     position: relative;
-    margin: 25px 0;
+    margin: var(--timeline-margin-top, 25px) 0 var(--timeline-margin-bottom, 25px);
 }
 
 .timeline-slab {
@@ -384,6 +384,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     transform: translateX(-50%);
     z-index: 6;
     pointer-events: auto;
+    --connector-length: 18px;
 }
 
 .timeline-connector {
@@ -416,21 +417,21 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .timeline-annotation.above .timeline-connector {
-    bottom: 10px;
-    height: 18px;
+    bottom: 0;
+    height: var(--connector-length);
 }
 
 .timeline-annotation.above .timeline-label {
-    bottom: 28px;
+    bottom: calc(var(--connector-length) + 4px);
 }
 
 .timeline-annotation.below .timeline-connector {
     top: 0;
-    height: 26px;
+    height: var(--connector-length);
 }
 
 .timeline-annotation.below .timeline-label {
-    top: 28px;
+    top: calc(var(--connector-length) + 4px);
 }
 
 .timeline-tooltip {
