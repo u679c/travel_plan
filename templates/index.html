@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>旅游路线定制系统</title>
+    <link rel="stylesheet" href="/static/vendor/element-ui/theme-chalk/index.css" />
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<div id="app" class="app">
+    <aside class="panel left">
+        <h1>旅游路线定制</h1>
+
+        <el-card class="card" shadow="never">
+            <div slot="header"><strong>新建行程</strong></div>
+            <el-form :model="tripForm" label-position="top" size="small">
+                <el-form-item label="行程名">
+                    <el-input v-model="tripForm.name" placeholder="例如：五日华南游"></el-input>
+                </el-form-item>
+                <el-row :gutter="10">
+                    <el-col :span="12">
+                        <el-form-item label="开始日期">
+                            <el-date-picker
+                                v-model="tripForm.start_date"
+                                type="date"
+                                format="yyyy-MM-dd"
+                                value-format="yyyy-MM-dd"
+                                placeholder="选择日期"
+                                style="width: 100%;"
+                            ></el-date-picker>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="结束日期">
+                            <el-date-picker
+                                v-model="tripForm.end_date"
+                                type="date"
+                                format="yyyy-MM-dd"
+                                value-format="yyyy-MM-dd"
+                                placeholder="选择日期"
+                                style="width: 100%;"
+                            ></el-date-picker>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-row :gutter="10">
+                    <el-col :span="12">
+                        <el-form-item label="开始时间(可选)">
+                            <el-time-picker
+                                v-model="tripForm.start_time"
+                                format="HH:mm"
+                                value-format="HH:mm"
+                                placeholder="选择时间"
+                                style="width: 100%;"
+                            ></el-time-picker>
+                        </el-form-item>
+                    </el-col>
+                    <el-col :span="12">
+                        <el-form-item label="结束时间(可选)">
+                            <el-time-picker
+                                v-model="tripForm.end_time"
+                                format="HH:mm"
+                                value-format="HH:mm"
+                                placeholder="选择时间"
+                                style="width: 100%;"
+                            ></el-time-picker>
+                        </el-form-item>
+                    </el-col>
+                </el-row>
+                <el-button type="primary" style="width: 100%;" @click="submitTrip">创建行程</el-button>
+            </el-form>
+        </el-card>
+
+        <el-card class="card" shadow="never">
+            <div slot="header"><strong>我的行程</strong></div>
+            <div v-if="trips.length > 0" class="trip-list">
+                <el-button
+                    v-for="trip in trips"
+                    :key="trip.id"
+                    class="trip-btn"
+                    :type="trip.id === currentTripId ? 'primary' : 'default'"
+                    @click="loadTripPlan(trip.id)"
+                >
+                    <div class="trip-btn-name">[[ trip.name ]]</div>
+                    <div class="trip-btn-meta">[[ trip.start_date ]] [[ trip.start_time ]] ~ [[ trip.end_date ]] [[ trip.end_time ]]</div>
+                </el-button>
+            </div>
+            <el-empty v-else description="暂无行程"></el-empty>
+        </el-card>
+
+        <el-button class="settings-trigger" circle icon="el-icon-setting" @click="openSettingsDialog"></el-button>
+    </aside>
+
+    <main class="panel right">
+        <section v-if="!currentPlan" class="empty">请选择或创建一个行程</section>
+
+        <section v-else>
+            <div class="detail-head">
+                <h2>[[ tripTitleText ]]</h2>
+                <el-button type="danger" size="mini" @click="deleteTrip">删除行程</el-button>
+            </div>
+
+            <el-card class="card" shadow="never">
+                <div class="action-row">
+                    <el-button type="primary" @click="openItemDialog('activity')">新增活动</el-button>
+                    <el-button type="warning" @click="openItemDialog('transport')">新增交通</el-button>
+                    <el-button type="success" @click="openItemDialog('address')">新增地址</el-button>
+                </div>
+            </el-card>
+
+            <el-card class="card timeline-card" shadow="never">
+                <div class="timeline-head">
+                   
+                    <div class="sun-meta">[[ sunMetaText ]]</div>
+                </div>
+                <div class="timeline-slab">
+                    <div id="timeline-day-blocks" class="timeline-day-blocks"></div>
+                    <div id="timeline-date-band" class="timeline-date-band"></div>
+                    <div class="timeline-wrap">
+                        <div id="timeline-day-lines" class="timeline-day-lines"></div>
+                        <div id="timeline-track" class="timeline-track">
+                            <div id="timeline-events" class="timeline-events"></div>
+                        </div>
+                    </div>
+                    <div id="timeline-scale" class="timeline-scale"></div>
+                </div>
+            </el-card>
+
+            <section class="lists-grid">
+                <el-card class="card" shadow="never">
+                    <div slot="header"><strong>条目列表</strong></div>
+                    <div v-if="listItems.length === 0" class="event-meta">暂无活动/交通条目</div>
+                    <div v-else class="event-list">
+                        <div v-for="item in listItems" :key="item.id" class="event-row">
+                            <div>
+                                <div><strong>[[ '[' + itemTypeLabel(item.item_type) + '] ' + item.title ]]</strong></div>
+                                <div class="event-meta">[[ itemDetailText(item) ]]</div>
+                            </div>
+                            <div class="item-actions">
+                                <el-button size="mini" @click="openEditDialog(item)">编辑</el-button>
+                                <el-button size="mini" type="danger" plain @click="removeItem(item)">删除</el-button>
+                            </div>
+                        </div>
+                    </div>
+                </el-card>
+
+                <el-card class="card" shadow="never">
+                    <div slot="header"><strong>地址列表</strong></div>
+                    <div v-if="addressItems.length === 0" class="event-meta">暂无地址条目</div>
+                    <div v-else class="event-list">
+                        <div v-for="item in addressItems" :key="item.id" class="event-row">
+                            <div>
+                                <div><strong>[[ '[地址] ' + item.title ]]</strong></div>
+                                <div class="event-meta">[[ itemDetailText(item) ]]</div>
+                            </div>
+                            <div class="item-actions">
+                                <el-button size="mini" @click="openEditDialog(item)">编辑</el-button>
+                                <el-button size="mini" type="danger" plain @click="removeItem(item)">删除</el-button>
+                            </div>
+                        </div>
+                    </div>
+                </el-card>
+            </section>
+        </section>
+    </main>
+
+    <el-dialog :title="dialogTitle('activity')" :visible.sync="dialogs.activity" width="760px" @close="closeItemDialog('activity')">
+        <el-form :model="itemForms.activity" label-position="top" size="small">
+            <el-row :gutter="10">
+                <el-col :span="12"><el-form-item label="标题"><el-input v-model="itemForms.activity.title"></el-input></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="地点"><el-input v-model="itemForms.activity.place"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="10" class="datetime-row">
+                <el-col :span="12">
+                    <el-form-item label="开始日期时间">
+                        <el-date-picker
+                            v-model="itemForms.activity.start_datetime"
+                            type="datetime"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-ddTHH:mm"
+                            placeholder="选择开始时间"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="结束日期时间">
+                        <el-date-picker
+                            v-model="itemForms.activity.end_datetime"
+                            type="datetime"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-ddTHH:mm"
+                            placeholder="选择结束时间"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+            <el-form-item label="备注"><el-input v-model="itemForms.activity.note"></el-input></el-form-item>
+        </el-form>
+        <span slot="footer">
+            <el-button @click="closeItemDialog('activity')">取消</el-button>
+            <el-button type="primary" @click="submitItem('activity')">保存</el-button>
+        </span>
+    </el-dialog>
+
+    <el-dialog :title="dialogTitle('transport')" :visible.sync="dialogs.transport" width="760px" @close="closeItemDialog('transport')">
+        <el-form :model="itemForms.transport" label-position="top" size="small">
+            <el-row :gutter="10">
+                <el-col :span="12"><el-form-item label="交通方式"><el-input v-model="itemForms.transport.transport_mode"></el-input></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="标题(可选)"><el-input v-model="itemForms.transport.title"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="10" class="datetime-row">
+                <el-col :span="12">
+                    <el-form-item label="开始日期时间">
+                        <el-date-picker
+                            v-model="itemForms.transport.start_datetime"
+                            type="datetime"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-ddTHH:mm"
+                            placeholder="选择开始时间"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="结束日期时间">
+                        <el-date-picker
+                            v-model="itemForms.transport.end_datetime"
+                            type="datetime"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-ddTHH:mm"
+                            placeholder="选择结束时间"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+            <el-row :gutter="10">
+                <el-col :span="12"><el-form-item label="出发地"><el-input v-model="itemForms.transport.from_place"></el-input></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="目的地"><el-input v-model="itemForms.transport.to_place"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-form-item label="备注"><el-input v-model="itemForms.transport.note"></el-input></el-form-item>
+        </el-form>
+        <span slot="footer">
+            <el-button @click="closeItemDialog('transport')">取消</el-button>
+            <el-button type="primary" @click="submitItem('transport')">保存</el-button>
+        </span>
+    </el-dialog>
+
+    <el-dialog :title="dialogTitle('address')" :visible.sync="dialogs.address" width="760px" @close="closeItemDialog('address')">
+        <el-form :model="itemForms.address" label-position="top" size="small">
+            <el-row :gutter="10">
+                <el-col :span="12"><el-form-item label="地址"><el-input v-model="itemForms.address.place"></el-input></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="显示标题(可选)"><el-input v-model="itemForms.address.title"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-row :gutter="10" class="datetime-row">
+                <el-col :span="12">
+                    <el-form-item label="开始日期时间">
+                        <el-date-picker
+                            v-model="itemForms.address.start_datetime"
+                            type="datetime"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-ddTHH:mm"
+                            placeholder="选择开始时间"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="结束日期时间(可选)">
+                        <el-date-picker
+                            v-model="itemForms.address.end_datetime"
+                            type="datetime"
+                            format="yyyy-MM-dd HH:mm"
+                            value-format="yyyy-MM-ddTHH:mm"
+                            placeholder="选择结束时间"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+            <el-row :gutter="10">
+                <el-col :span="12"><el-form-item label="纬度(可选)"><el-input v-model="itemForms.address.latitude"></el-input></el-form-item></el-col>
+                <el-col :span="12"><el-form-item label="经度(可选)"><el-input v-model="itemForms.address.longitude"></el-input></el-form-item></el-col>
+            </el-row>
+            <el-form-item label="备注"><el-input v-model="itemForms.address.note"></el-input></el-form-item>
+            <el-checkbox v-model="itemForms.address.use_geocode">未填坐标时使用高德自动解析</el-checkbox>
+        </el-form>
+        <span slot="footer">
+            <el-button @click="closeItemDialog('address')">取消</el-button>
+            <el-button type="primary" @click="submitItem('address')">保存</el-button>
+        </span>
+    </el-dialog>
+
+    <el-dialog title="系统设置" :visible.sync="dialogs.settings" width="520px">
+        <el-form :model="settings" label-position="top" size="small">
+            <el-form-item label="高德 API Key">
+                <el-input v-model="settings.amap_api_key" placeholder="请输入高德 Web 服务 Key"></el-input>
+            </el-form-item>
+            <el-form-item label="高德 Security Key（可选）">
+                <el-input v-model="settings.amap_security_key" placeholder="可选，若启用数字签名再填"></el-input>
+            </el-form-item>
+        </el-form>
+        <span slot="footer">
+            <el-button @click="dialogs.settings = false">取消</el-button>
+            <el-button type="primary" @click="submitSettings">保存设置</el-button>
+        </span>
+    </el-dialog>
+</div>
+
+<script src="/static/vendor/vue/vue.min.js"></script>
+<script src="/static/vendor/element-ui/index.js"></script>
+<script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
