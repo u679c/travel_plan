@@ -8,8 +8,27 @@
     <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-<div id="app" class="app">
-    <aside class="panel left">
+<div
+    id="app"
+    :class="[
+        'app',
+        {
+            'sidebar-collapsed': isSidebarCollapsed,
+            'sidebar-narrow': isNarrowScreen,
+            'sidebar-overlay-active': isNarrowScreen && overlaySidebarOpen
+        }
+    ]"
+>
+    <el-button
+        class="sidebar-toggle"
+        circle
+        size="mini"
+        :icon="isSidebarCollapsed ? 'el-icon-s-unfold' : 'el-icon-s-fold'"
+        :title="isSidebarCollapsed ? '展开左侧栏' : '收回左侧栏'"
+        @click="toggleSidebar"
+    ></el-button>
+
+    <aside :class="['panel', 'left', { collapsed: isSidebarCollapsed, overlay: isNarrowScreen }]">
         <h1>旅游路线定制</h1>
 
         <el-card class="card" shadow="never">
@@ -92,6 +111,8 @@
 
         <el-button class="settings-trigger" circle icon="el-icon-setting" @click="openSettingsDialog"></el-button>
     </aside>
+
+    <div v-if="isNarrowScreen && overlaySidebarOpen" class="sidebar-backdrop" @click="overlaySidebarOpen = false"></div>
 
     <main class="panel right">
         <section v-if="!currentPlan" class="empty">请选择或创建一个行程</section>

@@ -43,6 +43,10 @@ new window.Vue({
     delimiters: ['[[', ']]'],
     data() {
         return {
+            sidebarBreakpoint: 1200,
+            sidebarAutoCollapsed: false,
+            manualSidebarCollapsed: false,
+            overlaySidebarOpen: false,
             trips: [],
             currentTripId: null,
             currentPlan: null,
@@ -116,6 +120,13 @@ new window.Vue({
         };
     },
     computed: {
+        isNarrowScreen() {
+            return this.sidebarAutoCollapsed;
+        },
+        isSidebarCollapsed() {
+            if (this.isNarrowScreen) return !this.overlaySidebarOpen;
+            return this.manualSidebarCollapsed;
+        },
         tripTitleText() {
             if (!this.currentPlan) return '';
             const t = this.currentPlan.trip;
@@ -145,6 +156,19 @@ new window.Vue({
         },
     },
     methods: {
+        handleResize() {
+            this.sidebarAutoCollapsed = window.innerWidth < this.sidebarBreakpoint;
+            if (!this.sidebarAutoCollapsed) {
+                this.overlaySidebarOpen = false;
+            }
+        },
+        toggleSidebar() {
+            if (this.isNarrowScreen) {
+                this.overlaySidebarOpen = !this.overlaySidebarOpen;
+                return;
+            }
+            this.manualSidebarCollapsed = !this.manualSidebarCollapsed;
+        },
         showError(message) {
             this.$message.error(message || '操作失败');
         },
@@ -579,8 +603,13 @@ new window.Vue({
         },
     },
     mounted() {
+        this.handleResize();
+        window.addEventListener('resize', this.handleResize);
         this.loadSettings()
             .then(() => this.loadTrips())
             .catch((err) => this.showError(err.message));
+    },
+    beforeDestroy() {
+        window.removeEventListener('resize', this.handleResize);
     },
 });
