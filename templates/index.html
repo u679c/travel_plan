@@ -160,7 +160,7 @@
                     <div v-else class="event-list">
                         <div v-for="item in listItems" :key="item.id" class="event-row">
                             <div>
-                                <div><strong>[[ '[' + itemTypeLabel(item.item_type) + '] ' + item.title ]]</strong></div>
+                                <div><strong>[[ '[' + itemTypeLabel(item.item_type) + '] ' + item.displayTitle() ]]</strong></div>
                                 <div class="event-meta">[[ itemDetailText(item) ]]</div>
                             </div>
                             <div class="item-actions">
@@ -177,7 +177,7 @@
                     <div v-else class="event-list">
                         <div v-for="item in addressItems" :key="item.id" class="event-row">
                             <div>
-                                <div><strong>[[ '[地址] ' + item.title ]]</strong></div>
+                                <div><strong>[[ '[地址] ' + item.displayTitle() ]]</strong></div>
                                 <div class="event-meta">[[ itemDetailText(item) ]]</div>
                             </div>
                             <div class="item-actions">

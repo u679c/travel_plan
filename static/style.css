@@ -281,11 +281,11 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .timeline-day-block.odd {
-    background: rgba(227, 239, 255, 0.9);
+    background: rgba(83, 83, 83, 0.274);
 }
 
 .timeline-day-block.even {
-    background: rgba(247, 241, 223, 0.9);
+    background: rgba(166, 166, 166, 0.294);
 }
 
 .timeline-date-band {
@@ -299,7 +299,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     position: absolute;
     top: 0;
     bottom: 0;
-    color: #1f2a44;
+    color: #141414;
     font-size: 12px;
     font-weight: 700;
     display: flex;
@@ -329,6 +329,8 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .timeline-day-lines {
+    box-shadow: 0px 0px 20px 6px rgba(15, 23, 42, 0.25);
+    padding:5px;
     position: absolute;
     inset: 0;
     pointer-events: none;
@@ -361,13 +363,13 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .chip-activity {
-    background: #e8f1ff;
+    background: #fdffd4;
     border-color: #a6c1f3;
     color: #1e3a8a;
 }
 
 .chip-transport {
-    background: #fff1e6;
+    background: #d3ffd9;
     border-color: #f4c18f;
     color: #9a4b11;
 }
@@ -463,6 +465,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .timeline-scale {
+    
     position: relative;
     height: 18px;
     margin: 0;
@@ -474,14 +477,15 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     position: absolute;
     top: 0;
     transform: translateX(-50%);
-    color: #64748b;
+    color: #000000;
     font-size: 11px;
     white-space: nowrap;
 }
 
 .timeline-tick-label.midnight {
-    color: #1f2937;
-    font-weight: 700;
+    font-weight: 800;
+    color: #000000;
+    font-size: 14px;
 }
 
 .event-list {

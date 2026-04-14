@@ -38,6 +38,113 @@ function resolveEndDayDate(item) {
     return item.day_date;
 }
 
+class TripItem {
+    constructor(raw) {
+        this.raw = raw || {};
+        Object.assign(this, this.raw);
+        this.price = Number(this.price) || 0;
+    }
+
+    resolveEndDayDate() {
+        return resolveEndDayDate(this);
+    }
+
+    getAbsRange(days) {
+        const startAbs = absMinutesFor(this.day_date, this.start_time, days);
+        const endAbs = absMinutesFor(this.resolveEndDayDate(), this.end_time, days);
+        if (startAbs === null || endAbs === null || endAbs <= startAbs) return null;
+        return { startAbs, endAbs };
+    }
+
+    formatTimeRange() {
+        const endDayDate = this.resolveEndDayDate();
+        if (endDayDate === this.day_date) return `${this.day_date} ${this.start_time} - ${this.end_time}`;
+        return `${this.day_date} ${this.start_time} - ${endDayDate} ${this.end_time}`;
+    }
+
+    displayTitle() {
+        if (this.item_type === 'transport') return this.title || this.transport_mode || '未命名';
+        if (this.item_type === 'stay') return this.title || this.place || '未命名';
+        return this.title || '未命名';
+    }
+
+    buildTimelineLabel() {
+        if (this.item_type === 'transport') {
+            const mode = (this.transport_mode || this.title || '').trim();
+            return `交通｜${mode || '未命名'}`;
+        }
+        if (this.item_type === 'stay') {
+            const place = (this.place || this.title || '').trim();
+            return `住处｜${place || '未命名'}`;
+        }
+        const title = (this.title || '').trim();
+        const shortTitle = title.length > 4 ? `${title.slice(0, 4)}...` : title;
+        return `活动｜${shortTitle || '未命名'}`;
+    }
+
+    buildDetailText(priceFormatter) {
+        const formatPrice = typeof priceFormatter === 'function' ? priceFormatter : (v) => Number(v || 0).toFixed(2);
+        let detail = this.formatTimeRange();
+        if (this.item_type === 'transport') detail += ` | ${this.transport_mode || ''} ${this.from_place || ''} → ${this.to_place || ''}`;
+        if (this.item_type === 'activity' && this.place) detail += ` | ${this.place}`;
+        if (this.item_type === 'stay') detail += ` | ${this.place || '-'}`;
+        if (this.item_type === 'address') {
+            detail += ` | ${this.place || '-'}`;
+            if (this.latitude !== null && this.longitude !== null) detail += ` | ${this.latitude}, ${this.longitude}`;
+        }
+        detail += ` | ¥${formatPrice(this.price)}`;
+        if (this.note) detail += ` | ${this.note}`;
+        return detail;
+    }
+
+    buildTimelineTooltipHtml(priceFormatter) {
+        const formatPrice = typeof priceFormatter === 'function' ? priceFormatter : (v) => Number(v || 0).toFixed(2);
+        let detail = this.formatTimeRange();
+        if (this.item_type === 'transport') detail += ` <br/> ${this.transport_mode || ''} <br/> ${this.from_place || ''} → ${this.to_place || ''}`;
+        if ((this.item_type === 'activity' || this.item_type === 'stay') && this.place) detail += ` <br/> ${this.place}`;
+        detail += ` <br/> 价格：¥${formatPrice(this.price)}`;
+        if (this.note) detail += ` <br/>备注： ${this.note}`;
+        return detail;
+    }
+}
+
+class TimelineNode {
+    constructor({ item, left, width, clipStart, clipEnd, lane }) {
+        this.item = item;
+        this.left = left;
+        this.width = width;
+        this.clipStart = clipStart;
+        this.clipEnd = clipEnd;
+        this.lane = lane || 0;
+
+        const center = left + width / 2;
+        this.baseCenter = Math.max(7, Math.min(center, 93));
+        this.anchorCenter = this.baseCenter;
+        this.side = 'above';
+        this.level = 0;
+    }
+
+    laneCenterAffinity(laneCount) {
+        const laneCenter = (laneCount - 1) / 2;
+        const laneDistanceToCenter = Math.abs(this.lane - laneCenter);
+        const maxDistance = Math.max(0.5, laneCenter);
+        return Math.max(0, 1 - laneDistanceToCenter / maxDistance);
+    }
+
+    preferredSide(index, laneCount) {
+        const laneCenter = (laneCount - 1) / 2;
+        if (laneCount > 1) {
+            if (this.lane < laneCenter) return 'above';
+            if (this.lane > laneCenter) return 'below';
+        }
+        return index % 2 === 0 ? 'above' : 'below';
+    }
+
+    baseConnectorLength(laneCount) {
+        return 12 + Math.round(this.laneCenterAffinity(laneCount) * 22);
+    }
+}
+
 new window.Vue({
     el: '#app',
     delimiters: ['[[', ']]'],
@@ -138,7 +245,8 @@ new window.Vue({
             return `${t.start_date} ${t.start_time} ~ ${t.end_date} ${t.end_time}`;
         },
         sortedItems() {
-            return this.currentPlan ? sortItems(this.currentPlan.items) : [];
+            if (!this.currentPlan) return [];
+            return sortItems(this.currentPlan.items).map((item) => new TripItem(item));
         },
         listItems() {
             return this.sortedItems.filter((item) => item.item_type !== 'address');
@@ -187,36 +295,9 @@ new window.Vue({
             if (type === 'address') return '地址';
             return '条目';
         },
-        formatItemTimeRange(item) {
-            const endDayDate = resolveEndDayDate(item);
-            if (endDayDate === item.day_date) return `${item.day_date} ${item.start_time} - ${item.end_time}`;
-            return `${item.day_date} ${item.start_time} - ${endDayDate} ${item.end_time}`;
-        },
-        buildItemLabel(item) {
-            if (item.item_type === 'transport') {
-                const mode = (item.transport_mode || item.title || '').trim();
-                return `交通｜${mode}`;
-            }
-            if (item.item_type === 'stay') {
-                const place = (item.place || item.title || '').trim();
-                return `住处｜${place || '未命名'}`;
-            }
-            const title = (item.title || '').trim();
-            const shortTitle = title.length > 4 ? `${title.slice(0, 4)}...` : title;
-            return `活动｜${shortTitle || '未命名'}`;
-        },
         itemDetailText(item) {
-            let detail = this.formatItemTimeRange(item);
-            if (item.item_type === 'transport') detail += ` | ${item.transport_mode || ''} ${item.from_place || ''} → ${item.to_place || ''}`;
-            if (item.item_type === 'activity' && item.place) detail += ` | ${item.place}`;
-            if (item.item_type === 'stay') detail += ` | ${item.place || '-'}`;
-            if (item.item_type === 'address') {
-                detail += ` | ${item.place || '-'}`;
-                if (item.latitude !== null && item.longitude !== null) detail += ` | ${item.latitude}, ${item.longitude}`;
-            }
-            detail += ` | ¥${this.formatPrice(item.price)}`;
-            if (item.note) detail += ` | ${item.note}`;
-            return detail;
+            const model = item instanceof TripItem ? item : new TripItem(item);
+            return model.buildDetailText((v) => this.formatPrice(v));
         },
         dialogTitle(type) {
             const prefix = this.editingItem && this.editingItem.item_type === type ? '编辑' : '新增';
@@ -471,14 +552,6 @@ new window.Vue({
             this.currentTripId = tripId;
             this.currentPlan = await api(`/api/trips/${tripId}/plan`);
         },
-        itemAbsRange(item, days) {
-            const startAbs = absMinutesFor(item.day_date, item.start_time, days);
-            const endDayDate = resolveEndDayDate(item);
-            const endAbs = absMinutesFor(endDayDate, item.end_time, days);
-            if (startAbs === null || endAbs === null) return null;
-            if (endAbs <= startAbs) return null;
-            return { startAbs, endAbs };
-        },
         renderTimeline() {
             const timelineTrack = document.getElementById('timeline-track');
             const timelineEvents = document.getElementById('timeline-events');
@@ -505,7 +578,7 @@ new window.Vue({
             const windowStart = this.currentPlan.timeline_start_abs_minutes;
             const windowEnd = this.currentPlan.timeline_end_abs_minutes;
             const totalMinutes = this.currentPlan.total_minutes;
-            const items = sortItems(this.currentPlan.items);
+            const items = this.sortedItems;
 
             timelineTrack.style.background = buildTimelineGradient(this.currentPlan.sun_profile, windowStart, windowEnd);
 
@@ -566,8 +639,7 @@ new window.Vue({
             const visibleItems = [];
             items.forEach((item) => {
                 if (item.item_type === 'address') return;
-
-                const absRange = this.itemAbsRange(item, days);
+                const absRange = item.getAbsRange(days);
                 if (!absRange) return;
                 const { startAbs, endAbs } = absRange;
 
@@ -577,18 +649,14 @@ new window.Vue({
 
                 const left = ((clipStart - windowStart) / totalMinutes) * 100;
                 const width = Math.max(((clipEnd - clipStart) / totalMinutes) * 100, 2.5);
-                const center = left + width / 2;
-                const clampedCenter = Math.max(7, Math.min(center, 93));
-
-                visibleItems.push({
+                visibleItems.push(new TimelineNode({
                     item,
                     left,
                     width,
-                    clampedCenter,
                     clipStart,
                     clipEnd,
                     lane: 0,
-                });
+                }));
             });
 
             visibleItems.sort((a, b) => a.clipStart - b.clipStart);
@@ -610,7 +678,6 @@ new window.Vue({
             });
 
             const laneCount = Math.max(1, laneEnds.length);
-            const hasMultipleLanes = laneCount > 1;
             const chipHeight = 10;
             const laneGap = 4;
             const trackPaddingTop = 4;
@@ -620,46 +687,83 @@ new window.Vue({
                 trackPaddingTop + laneCount * chipHeight + (laneCount - 1) * laneGap + trackPaddingBottom,
             );
             const chipTopForLane = (lane) => {
-                if (!hasMultipleLanes) return Math.round((trackHeight - chipHeight) / 2);
+                if (laneCount <= 1) return Math.round((trackHeight - chipHeight) / 2);
                 return trackPaddingTop + lane * (chipHeight + laneGap);
             };
             timelineTrack.style.height = `${trackHeight}px`;
             const trackWidthPx = Math.max(1, timelineTrack.clientWidth || timelineTrack.getBoundingClientRect().width || 1);
-            const placed = { above: [], below: [] };
             let maxAboveClearance = 0;
             let maxBelowClearance = 0;
-            const overlaps = (a, b) => !(a.x2 < b.x1 || a.x1 > b.x2);
-            const findAnnotationPlacement = (preferredSide, anchorCenter, labelText) => {
-                const textLen = (labelText || '').length;
-                const estWidthPx = Math.max(84, Math.min(220, 20 + textLen * 14));
-                const widthPct = (estWidthPx / trackWidthPx) * 100;
-                const maxLevels = Math.max(12, visibleItems.length + 4);
-                const trySide = (side) => {
-                    for (let level = 0; level < maxLevels; level += 1) {
-                        const box = { x1: anchorCenter - widthPct / 2, x2: anchorCenter + widthPct / 2, level };
-                        const conflict = placed[side].some((p) => p.level === level && overlaps(box, p));
+            const placed = { above: [], below: [] };
+            const rectOverlaps = (a, b) => !(a.x2 < b.x1 || a.x1 > b.x2 || a.y2 < b.y1 || a.y1 > b.y2);
+            const labelPaddingPx = 12;
+            const collisionGapPx = 6;
+            const stepXPx = 8;
+            const connectorStepPx = 8;
+            const maxLevels = Math.max(12, visibleItems.length + 4);
+            const toPct = (px) => (px / trackWidthPx) * 100;
+            const stepXPct = toPct(stepXPx);
+            const measureLabelSizePx = (labelText) => {
+                const measurer = document.createElement('div');
+                measurer.className = 'timeline-label';
+                measurer.style.position = 'absolute';
+                measurer.style.left = '-9999px';
+                measurer.style.top = '-9999px';
+                measurer.style.visibility = 'hidden';
+                measurer.style.pointerEvents = 'none';
+                measurer.textContent = labelText || '';
+                timelineEvents.appendChild(measurer);
+                const rect = measurer.getBoundingClientRect();
+                timelineEvents.removeChild(measurer);
+                const width = Math.max(84, Math.min(360, Math.ceil(rect.width || 84)));
+                const height = Math.max(24, Math.ceil(rect.height || 24));
+                return { width, height };
+            };
+            const buildAnchorCandidates = (node) => {
+                const minCenter = Math.max(7, node.left);
+                const maxCenter = Math.min(93, node.left + node.width);
+                if (maxCenter <= minCenter || stepXPct <= 0) return [node.baseCenter];
+                const candidates = [node.baseCenter];
+                const maxStep = Math.ceil(Math.max(node.baseCenter - minCenter, maxCenter - node.baseCenter) / stepXPct);
+                for (let i = 1; i <= maxStep; i += 1) {
+                    const left = node.baseCenter - i * stepXPct;
+                    const right = node.baseCenter + i * stepXPct;
+                    if (left >= minCenter) candidates.push(left);
+                    if (right <= maxCenter) candidates.push(right);
+                }
+                return candidates;
+            };
+            const tryPlaceOnSide = (node, side, labelWidthPct, labelHeightPx, baseConnector) => {
+                const candidates = buildAnchorCandidates(node);
+                for (let level = 0; level < maxLevels; level += 1) {
+                    for (let i = 0; i < candidates.length; i += 1) {
+                        const anchorCenter = candidates[i];
+                        const connectorLength = baseConnector + level * connectorStepPx;
+                        const yTop = side === 'above'
+                            ? -(connectorLength + 4 + labelHeightPx)
+                            : (connectorLength + 4);
+                        const yBottom = side === 'above'
+                            ? -(connectorLength + 4)
+                            : (connectorLength + 4 + labelHeightPx);
+                        const box = {
+                            x1: anchorCenter - labelWidthPct / 2 - toPct(collisionGapPx),
+                            x2: anchorCenter + labelWidthPct / 2 + toPct(collisionGapPx),
+                            y1: yTop - collisionGapPx,
+                            y2: yBottom + collisionGapPx,
+                        };
+                        const conflict = placed[side].some((p) => rectOverlaps(box, p));
                         if (!conflict) {
                             placed[side].push(box);
-                            return { side, level };
+                            return { side, level, anchorCenter, connectorLength };
                         }
                     }
-                    return null;
-                };
-
-                const first = trySide(preferredSide);
-                if (first) return first;
-                const second = trySide(preferredSide === 'above' ? 'below' : 'above');
-                if (second) return second;
-                return { side: preferredSide, level: 0 };
+                }
+                return null;
             };
 
             visibleItems.forEach((entry, idx) => {
-                const { item, left, width, clampedCenter, lane } = entry;
+                const { item, left, width, lane } = entry;
                 const chipTop = chipTopForLane(lane);
-                const laneCenter = (laneCount - 1) / 2;
-                const laneDistanceToCenter = Math.abs(lane - laneCenter);
-                const maxDistance = Math.max(0.5, laneCenter);
-                const centerAffinity = Math.max(0, 1 - laneDistanceToCenter / maxDistance); // 0=outer, 1=center
                 const chip = document.createElement('div');
                 chip.className = `timeline-event-chip chip-${item.item_type}`;
                 chip.style.left = `${left}%`;
@@ -668,30 +772,24 @@ new window.Vue({
                 chip.style.height = `${chipHeight}px`;
                 timelineEvents.appendChild(chip);
 
-                const labelText = this.buildItemLabel(item);
-
-                let detail = this.formatItemTimeRange(item);
-                if (item.item_type === 'transport') detail += ` <br/> ${item.transport_mode || ''} <br/> ${item.from_place || ''} → ${item.to_place || ''}`;
-                if (item.item_type === 'activity' && item.place) detail += ` <br/> ${item.place}`;
-                if (item.item_type === 'stay' && item.place) detail += ` <br/> ${item.place}`;
-                detail += ` <br/> 价格：¥${this.formatPrice(item.price)}`;
-                if (item.note) detail += ` <br/>备注： ${item.note}`;
+                const labelText = item.buildTimelineLabel();
+                const detail = item.buildTimelineTooltipHtml((v) => this.formatPrice(v));
 
                 const annotation = document.createElement('div');
-                let preferredSide = idx % 2 === 0 ? 'above' : 'below';
-                if (hasMultipleLanes) {
-                    if (lane < laneCenter) preferredSide = 'above';
-                    else if (lane > laneCenter) preferredSide = 'below';
-                }
-                const placement = findAnnotationPlacement(preferredSide, clampedCenter, labelText);
-                const baseConnector = 12 + Math.round(centerAffinity * 22); // outer short, center long
-                const connectorLength = baseConnector + placement.level * 8;
+                const preferredSide = entry.preferredSide(idx, laneCount);
+                const baseConnector = entry.baseConnectorLength(laneCount); // outer short, center long
+                const labelSizePx = measureLabelSizePx(labelText);
+                const labelWidthPct = toPct(labelSizePx.width + labelPaddingPx * 2);
+                const placement = tryPlaceOnSide(entry, preferredSide, labelWidthPct, labelSizePx.height, baseConnector)
+                    || tryPlaceOnSide(entry, preferredSide === 'above' ? 'below' : 'above', labelWidthPct, labelSizePx.height, baseConnector)
+                    || { side: preferredSide, level: 0, anchorCenter: entry.baseCenter, connectorLength: baseConnector };
+                const connectorLength = placement.connectorLength || (baseConnector + placement.level * connectorStepPx);
                 const labelClearance = connectorLength + 34;
                 if (placement.side === 'above') maxAboveClearance = Math.max(maxAboveClearance, labelClearance);
                 else maxBelowClearance = Math.max(maxBelowClearance, labelClearance);
 
                 annotation.className = `timeline-annotation ${placement.side}`;
-                annotation.style.left = `${clampedCenter}%`;
+                annotation.style.left = `${placement.anchorCenter}%`;
                 annotation.style.top = `${chipTop + Math.round(chipHeight / 2)}px`;
                 annotation.style.setProperty('--connector-length', `${connectorLength}px`);
                 annotation.innerHTML = `
@@ -703,8 +801,8 @@ new window.Vue({
             });
 
             if (timelineWrap) {
-                const topMargin = Math.max(25, Math.ceil(maxAboveClearance + 6));
-                const bottomMargin = Math.max(25, Math.ceil(maxBelowClearance + 6));
+                const topMargin = Math.max(16, Math.ceil(maxAboveClearance + 2));
+                const bottomMargin = Math.max(16, Math.ceil(maxBelowClearance + 2));
                 timelineWrap.style.setProperty('--timeline-margin-top', `${topMargin}px`);
                 timelineWrap.style.setProperty('--timeline-margin-bottom', `${bottomMargin}px`);
             }
