@@ -87,11 +87,21 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     gap: 8px;
 }
 
+.trip-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .trip-btn {
-    width: 100%;
+    flex: 1;
     min-height: 58px;
     white-space: normal;
     text-align: left;
+}
+
+.trip-edit-btn {
+    flex: 0 0 auto;
 }
 
 .trip-btn-name {
@@ -415,6 +425,12 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     color: #1f2937;
     font-weight: 600;
     white-space: nowrap;
+}
+
+.trip-edit-tip {
+    margin-top: 8px;
+    color: #b45309;
+    font-size: 12px;
 }
 
 .lists-grid {

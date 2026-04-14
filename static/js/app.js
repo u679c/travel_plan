@@ -55,10 +55,19 @@ new window.Vue({
                 transport: false,
                 stay: false,
                 address: false,
+                tripEdit: false,
                 settings: false,
             },
             editingItem: null,
             tripForm: {
+                name: '',
+                start_date: '',
+                end_date: '',
+                start_time: '',
+                end_time: '',
+            },
+            tripEditForm: {
+                id: null,
                 name: '',
                 start_date: '',
                 end_date: '',
@@ -376,6 +385,33 @@ new window.Vue({
                 };
                 await this.loadTrips();
                 this.showSuccess('行程已创建');
+            } catch (err) {
+                this.showError(err.message);
+            }
+        },
+        openTripEditDialog(trip) {
+            this.tripEditForm = {
+                id: trip.id,
+                name: trip.name || '',
+                start_date: trip.start_date || '',
+                end_date: trip.end_date || '',
+                start_time: trip.start_time || '',
+                end_time: trip.end_time || '',
+            };
+            this.dialogs.tripEdit = true;
+        },
+        async submitTripEdit() {
+            const tripId = this.tripEditForm.id;
+            if (!tripId) return;
+            try {
+                await api(`/api/trips/${tripId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify(this.tripEditForm),
+                });
+                this.dialogs.tripEdit = false;
+                await this.loadTrips();
+                await this.loadTripPlan(tripId);
+                this.$message.warning('编辑后可能导致条目不在行程内，请妥善编辑');
             } catch (err) {
                 this.showError(err.message);
             }

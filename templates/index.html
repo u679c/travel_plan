@@ -75,16 +75,17 @@
         <el-card class="card" shadow="never">
             <div slot="header"><strong>我的行程</strong></div>
             <div v-if="trips.length > 0" class="trip-list">
-                <el-button
-                    v-for="trip in trips"
-                    :key="trip.id"
-                    class="trip-btn"
-                    :type="trip.id === currentTripId ? 'primary' : 'default'"
-                    @click="loadTripPlan(trip.id)"
-                >
-                    <div class="trip-btn-name">[[ trip.name ]]</div>
-                    <div class="trip-btn-meta">[[ trip.start_date ]] [[ trip.start_time ]] ~ [[ trip.end_date ]] [[ trip.end_time ]]</div>
-                </el-button>
+                <div v-for="trip in trips" :key="trip.id" class="trip-row">
+                    <el-button
+                        class="trip-btn"
+                        :type="trip.id === currentTripId ? 'primary' : 'default'"
+                        @click="loadTripPlan(trip.id)"
+                    >
+                        <div class="trip-btn-name">[[ trip.name ]]</div>
+                        <div class="trip-btn-meta">[[ trip.start_date ]] [[ trip.start_time ]] ~ [[ trip.end_date ]] [[ trip.end_time ]]</div>
+                    </el-button>
+                    <el-button class="trip-edit-btn" icon="el-icon-edit" circle @click.stop="openTripEditDialog(trip)"></el-button>
+                </div>
             </div>
             <el-empty v-else description="暂无行程"></el-empty>
         </el-card>
@@ -362,6 +363,67 @@
         <span slot="footer">
             <el-button @click="dialogs.settings = false">取消</el-button>
             <el-button type="primary" @click="submitSettings">保存设置</el-button>
+        </span>
+    </el-dialog>
+
+    <el-dialog title="编辑行程" :visible.sync="dialogs.tripEdit" width="560px">
+        <el-form :model="tripEditForm" label-position="top" size="small">
+            <el-form-item label="行程名">
+                <el-input v-model="tripEditForm.name"></el-input>
+            </el-form-item>
+            <el-row :gutter="10">
+                <el-col :span="12">
+                    <el-form-item label="开始日期">
+                        <el-date-picker
+                            v-model="tripEditForm.start_date"
+                            type="date"
+                            format="yyyy-MM-dd"
+                            value-format="yyyy-MM-dd"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="结束日期">
+                        <el-date-picker
+                            v-model="tripEditForm.end_date"
+                            type="date"
+                            format="yyyy-MM-dd"
+                            value-format="yyyy-MM-dd"
+                            style="width: 100%;"
+                        ></el-date-picker>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+            <el-row :gutter="10">
+                <el-col :span="12">
+                    <el-form-item label="开始时间(可选)">
+                        <el-time-picker
+                            v-model="tripEditForm.start_time"
+                            format="HH:mm"
+                            value-format="HH:mm"
+                            placeholder="选择时间"
+                            style="width: 100%;"
+                        ></el-time-picker>
+                    </el-form-item>
+                </el-col>
+                <el-col :span="12">
+                    <el-form-item label="结束时间(可选)">
+                        <el-time-picker
+                            v-model="tripEditForm.end_time"
+                            format="HH:mm"
+                            value-format="HH:mm"
+                            placeholder="选择时间"
+                            style="width: 100%;"
+                        ></el-time-picker>
+                    </el-form-item>
+                </el-col>
+            </el-row>
+            <div class="trip-edit-tip">编辑后可能导致条目不在行程内，请妥善编辑。</div>
+        </el-form>
+        <span slot="footer">
+            <el-button @click="dialogs.tripEdit = false">取消</el-button>
+            <el-button type="primary" @click="submitTripEdit">保存</el-button>
         </span>
     </el-dialog>
 </div>

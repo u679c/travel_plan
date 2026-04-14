@@ -527,6 +527,80 @@ def create_trip() -> Any:
     return jsonify(dict(row)), 201
 
 
+@app.put("/api/trips/<int:trip_id>")
+def update_trip(trip_id: int) -> Any:
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    start_date = data.get("start_date")
+    end_date = data.get("end_date")
+    start_time_raw = data.get("start_time")
+    end_time_raw = data.get("end_time")
+
+    if not name or not start_date or not end_date:
+        return jsonify({"error": "name, start_date, end_date 必填"}), 400
+
+    try:
+        start = date.fromisoformat(start_date)
+        end = date.fromisoformat(end_date)
+    except ValueError:
+        return jsonify({"error": "日期格式必须是 YYYY-MM-DD"}), 400
+
+    if end < start:
+        return jsonify({"error": "结束日期不能早于开始日期"}), 400
+
+    parsed_start = parse_time_or_none(start_time_raw)
+    parsed_end = parse_time_or_none(end_time_raw)
+    if start_time_raw not in (None, "") and parsed_start is None:
+        return jsonify({"error": "start_time 格式必须是 HH:MM"}), 400
+    if end_time_raw not in (None, "") and parsed_end is None:
+        return jsonify({"error": "end_time 格式必须是 HH:MM"}), 400
+
+    start_time = parsed_start or datetime.strptime("00:00", "%H:%M").time()
+    end_time = parsed_end or datetime.strptime("23:59", "%H:%M").time()
+
+    start_dt = datetime.combine(start, start_time)
+    end_dt = datetime.combine(end, end_time)
+    if end_dt <= start_dt:
+        return jsonify({"error": "行程结束时间必须晚于开始时间"}), 400
+
+    db = get_db()
+    cur = db.execute(
+        """
+        UPDATE trips
+        SET name = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?
+        WHERE id = ?
+        """,
+        (
+            name,
+            start_date,
+            end_date,
+            start_time.strftime("%H:%M"),
+            end_time.strftime("%H:%M"),
+            trip_id,
+        ),
+    )
+    db.commit()
+    if cur.rowcount == 0:
+        return jsonify({"error": "行程不存在"}), 404
+
+    row = db.execute(
+        """
+        SELECT
+            id,
+            name,
+            start_date,
+            end_date,
+            COALESCE(start_time, '00:00') AS start_time,
+            COALESCE(end_time, '23:59') AS end_time,
+            created_at
+        FROM trips
+        WHERE id = ?
+        """,
+        (trip_id,),
+    ).fetchone()
+    return jsonify(dict(row))
+
+
 @app.delete("/api/trips/<int:trip_id>")
 def delete_trip(trip_id: int) -> Any:
     db = get_db()
