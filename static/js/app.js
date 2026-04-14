@@ -70,6 +70,7 @@ new window.Vue({
                     title: '',
                     start_datetime: '',
                     end_datetime: '',
+                    price: 0,
                     place: '',
                     note: '',
                 },
@@ -77,6 +78,7 @@ new window.Vue({
                     transport_mode: '',
                     start_datetime: '',
                     end_datetime: '',
+                    price: 0,
                     from_place: '',
                     to_place: '',
                     title: '',
@@ -86,6 +88,7 @@ new window.Vue({
                     place: '',
                     start_datetime: '',
                     end_datetime: '',
+                    price: 0,
                     title: '',
                     note: '',
                 },
@@ -93,6 +96,7 @@ new window.Vue({
                     place: '',
                     start_datetime: '',
                     end_datetime: '',
+                    price: 0,
                     title: '',
                     note: '',
                     latitude: '',
@@ -122,6 +126,9 @@ new window.Vue({
         addressItems() {
             return this.sortedItems.filter((item) => item.item_type === 'address');
         },
+        totalBudget() {
+            return this.sortedItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
+        },
     },
     watch: {
         currentPlan() {
@@ -134,6 +141,11 @@ new window.Vue({
         },
         showSuccess(message) {
             this.$message.success(message);
+        },
+        formatPrice(value) {
+            const num = Number(value);
+            if (!Number.isFinite(num)) return '0.00';
+            return num.toFixed(2);
         },
         itemTypeLabel(type) {
             if (type === 'transport') return '交通';
@@ -169,6 +181,7 @@ new window.Vue({
                 detail += ` | ${item.place || '-'}`;
                 if (item.latitude !== null && item.longitude !== null) detail += ` | ${item.latitude}, ${item.longitude}`;
             }
+            detail += ` | ¥${this.formatPrice(item.price)}`;
             if (item.note) detail += ` | ${item.note}`;
             return detail;
         },
@@ -192,6 +205,7 @@ new window.Vue({
                     title: '',
                     start_datetime: start,
                     end_datetime: end,
+                    price: 0,
                     place: '',
                     note: '',
                 };
@@ -201,6 +215,7 @@ new window.Vue({
                     transport_mode: '',
                     start_datetime: start,
                     end_datetime: end,
+                    price: 0,
                     from_place: '',
                     to_place: '',
                     title: '',
@@ -212,6 +227,7 @@ new window.Vue({
                     place: '',
                     start_datetime: start,
                     end_datetime: end,
+                    price: 0,
                     title: '',
                     note: '',
                     latitude: '',
@@ -224,6 +240,7 @@ new window.Vue({
                     place: '',
                     start_datetime: start,
                     end_datetime: end,
+                    price: 0,
                     title: '',
                     note: '',
                 };
@@ -261,6 +278,7 @@ new window.Vue({
         buildItemPayload(type) {
             const form = { ...this.itemForms[type] };
             const payload = { ...form, item_type: type };
+            payload.price = Number(payload.price || 0);
 
             if (payload.start_datetime) {
                 const start = parseLocalDateTime(payload.start_datetime);
@@ -508,6 +526,7 @@ new window.Vue({
                 if (item.item_type === 'transport') detail += ` <br/> ${item.transport_mode || ''} <br/> ${item.from_place || ''} → ${item.to_place || ''}`;
                 if (item.item_type === 'activity' && item.place) detail += ` <br/> ${item.place}`;
                 if (item.item_type === 'stay' && item.place) detail += ` <br/> ${item.place}`;
+                detail += ` <br/> 价格：¥${this.formatPrice(item.price)}`;
                 if (item.note) detail += ` <br/>备注： ${item.note}`;
 
                 const annotation = document.createElement('div');

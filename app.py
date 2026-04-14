@@ -69,6 +69,7 @@ def init_db() -> None:
             day_date TEXT NOT NULL,
             start_time TEXT NOT NULL,
             end_time TEXT NOT NULL,
+            price REAL NOT NULL DEFAULT 0,
             title TEXT NOT NULL,
             item_type TEXT NOT NULL DEFAULT 'activity',
             place TEXT,
@@ -114,6 +115,7 @@ def init_db() -> None:
     ensure_column(db, "itinerary_items", "latitude", "latitude REAL")
     ensure_column(db, "itinerary_items", "longitude", "longitude REAL")
     ensure_column(db, "itinerary_items", "end_day_date", "end_day_date TEXT")
+    ensure_column(db, "itinerary_items", "price", "price REAL NOT NULL DEFAULT 0")
     db.commit()
     db.close()
 
@@ -397,6 +399,7 @@ def get_item_or_404(db: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
             start_time,
             COALESCE(end_day_date, day_date) AS end_day_date,
             end_time,
+            COALESCE(price, 0) AS price,
             title,
             item_type,
             place,
@@ -563,6 +566,7 @@ def get_trip_plan(trip_id: int) -> Any:
             start_time,
             COALESCE(end_day_date, day_date) AS end_day_date,
             end_time,
+            COALESCE(price, 0) AS price,
             title,
             item_type,
             place,
@@ -706,6 +710,7 @@ def add_item(trip_id: int) -> Any:
     transport_mode = (data.get("transport_mode") or "").strip()
     from_place = (data.get("from_place") or "").strip()
     to_place = (data.get("to_place") or "").strip()
+    price_raw = data.get("price")
     latitude = data.get("latitude")
     longitude = data.get("longitude")
     use_geocode = bool(data.get("use_geocode", True))
@@ -737,6 +742,13 @@ def add_item(trip_id: int) -> Any:
             return jsonify({"error": "住处类型必须填写 place"}), 400
         if not title:
             title = f"住处: {place}"
+
+    price = 0.0
+    if price_raw not in (None, ""):
+        parsed_price = parse_float(price_raw)
+        if parsed_price is None:
+            return jsonify({"error": "price 必须是数字"}), 400
+        price = parsed_price
 
     db = get_db()
     trip = get_trip_or_404(db, trip_id)
@@ -809,8 +821,8 @@ def add_item(trip_id: int) -> Any:
     cur = db.execute(
         """
         INSERT INTO itinerary_items
-        (trip_id, day_date, start_time, end_day_date, end_time, title, item_type, place, transport_mode, from_place, to_place, latitude, longitude, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (trip_id, day_date, start_time, end_day_date, end_time, price, title, item_type, place, transport_mode, from_place, to_place, latitude, longitude, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             trip_id,
@@ -818,6 +830,7 @@ def add_item(trip_id: int) -> Any:
             start_time,
             end_day_date,
             end_time,
+            price,
             title,
             item_type,
             place,
@@ -856,6 +869,7 @@ def add_item(trip_id: int) -> Any:
             start_time,
             COALESCE(end_day_date, day_date) AS end_day_date,
             end_time,
+            COALESCE(price, 0) AS price,
             title,
             item_type,
             place,
@@ -896,6 +910,7 @@ def update_item(item_id: int) -> Any:
     transport_mode = (data.get("transport_mode") if "transport_mode" in data else existing["transport_mode"] or "").strip()
     from_place = (data.get("from_place") if "from_place" in data else existing["from_place"] or "").strip()
     to_place = (data.get("to_place") if "to_place" in data else existing["to_place"] or "").strip()
+    price_raw = data.get("price") if "price" in data else existing["price"]
     note = (data.get("note") if "note" in data else existing["note"] or "").strip()
 
     if not start_datetime_raw and (not day_date or not start_time):
@@ -921,6 +936,14 @@ def update_item(item_id: int) -> Any:
             return jsonify({"error": "住处类型必须填写 place"}), 400
         if not title:
             title = f"住处: {place}"
+
+    if price_raw in (None, ""):
+        price = 0.0
+    else:
+        parsed_price = parse_float(price_raw)
+        if parsed_price is None:
+            return jsonify({"error": "price 必须是数字"}), 400
+        price = parsed_price
 
     trip = get_trip_or_404(db, int(existing["trip_id"]))
     if not trip:
@@ -996,7 +1019,7 @@ def update_item(item_id: int) -> Any:
     db.execute(
         """
         UPDATE itinerary_items
-        SET day_date = ?, start_time = ?, end_day_date = ?, end_time = ?, title = ?, item_type = ?,
+        SET day_date = ?, start_time = ?, end_day_date = ?, end_time = ?, price = ?, title = ?, item_type = ?,
             place = ?, transport_mode = ?, from_place = ?, to_place = ?, latitude = ?, longitude = ?, note = ?
         WHERE id = ?
         """,
@@ -1005,6 +1028,7 @@ def update_item(item_id: int) -> Any:
             start_time,
             end_day_date,
             end_time,
+            price,
             title,
             item_type,
             place if place else None,
