@@ -281,11 +281,11 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .timeline-day-block.odd {
-    background: rgba(83, 83, 83, 0.274);
+    background: rgba(83, 83, 83, 0.1);
 }
 
 .timeline-day-block.even {
-    background: rgba(166, 166, 166, 0.294);
+    background: rgba(166, 166, 166, 0.1);
 }
 
 .timeline-date-band {
