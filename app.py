@@ -714,8 +714,8 @@ def add_item(trip_id: int) -> Any:
     if not start_datetime_raw and (not day_date or not start_time):
         return jsonify({"error": "start_datetime 或 day_date+start_time 必填"}), 400
 
-    if item_type not in ("activity", "transport", "address"):
-        return jsonify({"error": "item_type 仅支持 activity/transport/address"}), 400
+    if item_type not in ("activity", "transport", "address", "stay"):
+        return jsonify({"error": "item_type 仅支持 activity/transport/address/stay"}), 400
 
     if item_type == "activity" and not title:
         return jsonify({"error": "活动类型必须填写 title"}), 400
@@ -731,6 +731,12 @@ def add_item(trip_id: int) -> Any:
             return jsonify({"error": "地址类型必须填写 place"}), 400
         if not title:
             title = f"地址: {place}"
+
+    if item_type == "stay":
+        if not place:
+            return jsonify({"error": "住处类型必须填写 place"}), 400
+        if not title:
+            title = f"住处: {place}"
 
     db = get_db()
     trip = get_trip_or_404(db, trip_id)
@@ -909,6 +915,12 @@ def update_item(item_id: int) -> Any:
             return jsonify({"error": "地址类型必须填写 place"}), 400
         if not title:
             title = f"地址: {place}"
+
+    if item_type == "stay":
+        if not place:
+            return jsonify({"error": "住处类型必须填写 place"}), 400
+        if not title:
+            title = f"住处: {place}"
 
     trip = get_trip_or_404(db, int(existing["trip_id"]))
     if not trip:

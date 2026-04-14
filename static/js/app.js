@@ -53,6 +53,7 @@ new window.Vue({
             dialogs: {
                 activity: false,
                 transport: false,
+                stay: false,
                 address: false,
                 settings: false,
             },
@@ -78,6 +79,13 @@ new window.Vue({
                     end_datetime: '',
                     from_place: '',
                     to_place: '',
+                    title: '',
+                    note: '',
+                },
+                stay: {
+                    place: '',
+                    start_datetime: '',
+                    end_datetime: '',
                     title: '',
                     note: '',
                 },
@@ -130,6 +138,7 @@ new window.Vue({
         itemTypeLabel(type) {
             if (type === 'transport') return '交通';
             if (type === 'activity') return '活动';
+            if (type === 'stay') return '住处';
             if (type === 'address') return '地址';
             return '条目';
         },
@@ -143,6 +152,10 @@ new window.Vue({
                 const mode = (item.transport_mode || item.title || '').trim();
                 return `交通｜${mode}`;
             }
+            if (item.item_type === 'stay') {
+                const place = (item.place || item.title || '').trim();
+                return `住处｜${place || '未命名'}`;
+            }
             const title = (item.title || '').trim();
             const shortTitle = title.length > 4 ? `${title.slice(0, 4)}...` : title;
             return `活动｜${shortTitle || '未命名'}`;
@@ -151,6 +164,7 @@ new window.Vue({
             let detail = this.formatItemTimeRange(item);
             if (item.item_type === 'transport') detail += ` | ${item.transport_mode || ''} ${item.from_place || ''} → ${item.to_place || ''}`;
             if (item.item_type === 'activity' && item.place) detail += ` | ${item.place}`;
+            if (item.item_type === 'stay') detail += ` | ${item.place || '-'}`;
             if (item.item_type === 'address') {
                 detail += ` | ${item.place || '-'}`;
                 if (item.latitude !== null && item.longitude !== null) detail += ` | ${item.latitude}, ${item.longitude}`;
@@ -203,6 +217,15 @@ new window.Vue({
                     latitude: '',
                     longitude: '',
                     use_geocode: true,
+                };
+            }
+            if (type === 'stay') {
+                this.itemForms.stay = {
+                    place: '',
+                    start_datetime: start,
+                    end_datetime: end,
+                    title: '',
+                    note: '',
                 };
             }
         },
@@ -484,6 +507,7 @@ new window.Vue({
                 let detail = this.formatItemTimeRange(item);
                 if (item.item_type === 'transport') detail += ` <br/> ${item.transport_mode || ''} <br/> ${item.from_place || ''} → ${item.to_place || ''}`;
                 if (item.item_type === 'activity' && item.place) detail += ` <br/> ${item.place}`;
+                if (item.item_type === 'stay' && item.place) detail += ` <br/> ${item.place}`;
                 if (item.note) detail += ` <br/>备注： ${item.note}`;
 
                 const annotation = document.createElement('div');

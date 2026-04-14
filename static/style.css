@@ -287,6 +287,12 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     color: #9a4b11;
 }
 
+.chip-stay {
+    background: #e9f8ef;
+    border-color: #9cd8b1;
+    color: #166534;
+}
+
 .timeline-annotation {
     position: absolute;
     top: 20px;
