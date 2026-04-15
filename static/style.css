@@ -27,7 +27,15 @@ body {
         radial-gradient(circle at 90% 5%, #dceeff 0%, transparent 35%),
         var(--bg);
 }
-
+.settings-version{
+    color: var(--muted);
+    font-size: 13px;
+}
+.settings-footer{
+    display: flex;
+    justify-content: space-between;
+    flex-direction: row;
+}
 .app {
     display: grid;
     grid-template-columns: 340px 1fr;
