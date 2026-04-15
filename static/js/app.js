@@ -729,6 +729,7 @@ new window.Vue({
             const laneGap = 4;
             const trackPaddingTop = 4;
             const trackPaddingBottom = 4;
+            const flippedConnectorExtraFixedPx = -10;
             const trackHeight = Math.max(
                 20,
                 trackPaddingTop + laneCount * chipHeight + (laneCount - 1) * laneGap + trackPaddingBottom,
@@ -827,13 +828,22 @@ new window.Vue({
 
                 const annotation = document.createElement('div');
                 let preferredSide;
+                const autoSide = !['above', 'below'].includes(item.annotation_side);
+                const naturalAutoSide = entry.preferredSide(idx, laneCount);
+                let laneAlternatedSide = false;
                 if (['above', 'below'].includes(item.annotation_side)) {
                     preferredSide = item.annotation_side;
                 } else {
                     const prevLaneSide = laneLastPlacedSide.get(lane);
-                    if (prevLaneSide === 'above') preferredSide = 'below';
-                    else if (prevLaneSide === 'below') preferredSide = 'above';
-                    else preferredSide = entry.preferredSide(idx, laneCount);
+                    if (prevLaneSide === 'above') {
+                        preferredSide = 'below';
+                        laneAlternatedSide = true;
+                    } else if (prevLaneSide === 'below') {
+                        preferredSide = 'above';
+                        laneAlternatedSide = true;
+                    } else {
+                        preferredSide = naturalAutoSide;
+                    }
                 }
                 const baseConnector = entry.baseConnectorLength(laneCount); // outer short, center long
                 const labelSizePx = measureLabelSizePx(labelText);
@@ -843,7 +853,16 @@ new window.Vue({
                     || { side: preferredSide, level: 0, anchorCenter: entry.baseCenter, connectorLength: baseConnector };
                 laneLastPlacedSide.set(lane, placement.side);
                 const connectorLengthAdjust = Number(item.connector_length_adjust || 0);
-                const connectorLength = Math.max(4, (placement.connectorLength || (baseConnector + placement.level * connectorStepPx)) + connectorLengthAdjust);
+                const flippedFromNatural = autoSide && laneAlternatedSide && placement.side !== naturalAutoSide;
+                const flippedConnectorCompensation = flippedFromNatural
+                    ? laneCount * (chipHeight + laneGap) + flippedConnectorExtraFixedPx
+                    : 0;
+                const connectorLength = Math.max(
+                    4,
+                    (placement.connectorLength || (baseConnector + placement.level * connectorStepPx))
+                        + flippedConnectorCompensation
+                        + connectorLengthAdjust,
+                );
                 const annotationOffsetPct = toPct(Number(item.annotation_offset || 0));
                 const anchorCenter = Math.max(0.5, Math.min(99.5, placement.anchorCenter + annotationOffsetPct));
                 const labelClearance = connectorLength + 34;
