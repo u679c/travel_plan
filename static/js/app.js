@@ -45,6 +45,8 @@ class TripItem {
         this.price = Number(this.price) || 0;
         this.annotation_offset = Number(this.annotation_offset) || 0;
         this.connector_length_adjust = Number(this.connector_length_adjust) || 0;
+        this.annotation_side = String(this.annotation_side || 'auto').toLowerCase();
+        if (!['auto', 'above', 'below'].includes(this.annotation_side)) this.annotation_side = 'auto';
     }
 
     resolveEndDayDate() {
@@ -208,6 +210,7 @@ new window.Vue({
                     price: 0,
                     annotation_offset: 0,
                     connector_length_adjust: 0,
+                    annotation_side: 'auto',
                     place: '',
                     note: '',
                 },
@@ -218,6 +221,7 @@ new window.Vue({
                     price: 0,
                     annotation_offset: 0,
                     connector_length_adjust: 0,
+                    annotation_side: 'auto',
                     from_place: '',
                     to_place: '',
                     title: '',
@@ -230,6 +234,7 @@ new window.Vue({
                     price: 0,
                     annotation_offset: 0,
                     connector_length_adjust: 0,
+                    annotation_side: 'auto',
                     title: '',
                     note: '',
                 },
@@ -350,6 +355,7 @@ new window.Vue({
                     price: 0,
                     annotation_offset: 0,
                     connector_length_adjust: 0,
+                    annotation_side: 'auto',
                     place: '',
                     note: '',
                 };
@@ -362,6 +368,7 @@ new window.Vue({
                     price: 0,
                     annotation_offset: 0,
                     connector_length_adjust: 0,
+                    annotation_side: 'auto',
                     from_place: '',
                     to_place: '',
                     title: '',
@@ -389,6 +396,7 @@ new window.Vue({
                     price: 0,
                     annotation_offset: 0,
                     connector_length_adjust: 0,
+                    annotation_side: 'auto',
                     title: '',
                     note: '',
                 };
@@ -430,6 +438,7 @@ new window.Vue({
             payload.price = Number(payload.price || 0);
             payload.annotation_offset = Number(payload.annotation_offset || 0);
             payload.connector_length_adjust = Number(payload.connector_length_adjust || 0);
+            payload.annotation_side = String(payload.annotation_side || 'auto');
 
             if (payload.start_datetime) {
                 const start = parseLocalDateTime(payload.start_datetime);
@@ -799,6 +808,7 @@ new window.Vue({
                 }
                 return null;
             };
+            const laneLastPlacedSide = new Map();
 
             visibleItems.forEach((entry, idx) => {
                 const { item, left, width, lane } = entry;
@@ -816,13 +826,22 @@ new window.Vue({
                 const detail = item.buildTimelineTooltipHtml((v) => this.formatPrice(v));
 
                 const annotation = document.createElement('div');
-                const preferredSide = entry.preferredSide(idx, laneCount);
+                let preferredSide;
+                if (['above', 'below'].includes(item.annotation_side)) {
+                    preferredSide = item.annotation_side;
+                } else {
+                    const prevLaneSide = laneLastPlacedSide.get(lane);
+                    if (prevLaneSide === 'above') preferredSide = 'below';
+                    else if (prevLaneSide === 'below') preferredSide = 'above';
+                    else preferredSide = entry.preferredSide(idx, laneCount);
+                }
                 const baseConnector = entry.baseConnectorLength(laneCount); // outer short, center long
                 const labelSizePx = measureLabelSizePx(labelText);
                 const labelWidthPct = toPct(labelSizePx.width + labelPaddingPx * 2);
                 const placement = tryPlaceOnSide(entry, preferredSide, labelWidthPct, labelSizePx.height, baseConnector)
                     || tryPlaceOnSide(entry, preferredSide === 'above' ? 'below' : 'above', labelWidthPct, labelSizePx.height, baseConnector)
                     || { side: preferredSide, level: 0, anchorCenter: entry.baseCenter, connectorLength: baseConnector };
+                laneLastPlacedSide.set(lane, placement.side);
                 const connectorLengthAdjust = Number(item.connector_length_adjust || 0);
                 const connectorLength = Math.max(4, (placement.connectorLength || (baseConnector + placement.level * connectorStepPx)) + connectorLengthAdjust);
                 const annotationOffsetPct = toPct(Number(item.annotation_offset || 0));

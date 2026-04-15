@@ -72,6 +72,7 @@ def init_db() -> None:
             price REAL NOT NULL DEFAULT 0,
             annotation_offset REAL NOT NULL DEFAULT 0,
             connector_length_adjust REAL NOT NULL DEFAULT 0,
+            annotation_side TEXT NOT NULL DEFAULT 'auto',
             title TEXT NOT NULL,
             item_type TEXT NOT NULL DEFAULT 'activity',
             place TEXT,
@@ -120,6 +121,7 @@ def init_db() -> None:
     ensure_column(db, "itinerary_items", "price", "price REAL NOT NULL DEFAULT 0")
     ensure_column(db, "itinerary_items", "annotation_offset", "annotation_offset REAL NOT NULL DEFAULT 0")
     ensure_column(db, "itinerary_items", "connector_length_adjust", "connector_length_adjust REAL NOT NULL DEFAULT 0")
+    ensure_column(db, "itinerary_items", "annotation_side", "annotation_side TEXT NOT NULL DEFAULT 'auto'")
     db.commit()
     db.close()
 
@@ -406,6 +408,7 @@ def get_item_or_404(db: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
             COALESCE(price, 0) AS price,
             COALESCE(annotation_offset, 0) AS annotation_offset,
             COALESCE(connector_length_adjust, 0) AS connector_length_adjust,
+            COALESCE(annotation_side, 'auto') AS annotation_side,
             title,
             item_type,
             place,
@@ -649,6 +652,7 @@ def get_trip_plan(trip_id: int) -> Any:
             COALESCE(price, 0) AS price,
             COALESCE(annotation_offset, 0) AS annotation_offset,
             COALESCE(connector_length_adjust, 0) AS connector_length_adjust,
+            COALESCE(annotation_side, 'auto') AS annotation_side,
             title,
             item_type,
             place,
@@ -795,6 +799,7 @@ def add_item(trip_id: int) -> Any:
     price_raw = data.get("price")
     annotation_offset_raw = data.get("annotation_offset")
     connector_length_adjust_raw = data.get("connector_length_adjust")
+    annotation_side_raw = data.get("annotation_side")
     latitude = data.get("latitude")
     longitude = data.get("longitude")
     use_geocode = bool(data.get("use_geocode", True))
@@ -847,6 +852,10 @@ def add_item(trip_id: int) -> Any:
         if parsed_connector_length_adjust is None:
             return jsonify({"error": "connector_length_adjust 必须是数字"}), 400
         connector_length_adjust = parsed_connector_length_adjust
+
+    annotation_side = str(annotation_side_raw or "auto").strip().lower()
+    if annotation_side not in ("auto", "above", "below"):
+        return jsonify({"error": "annotation_side 仅支持 auto/above/below"}), 400
 
     db = get_db()
     trip = get_trip_or_404(db, trip_id)
@@ -919,8 +928,8 @@ def add_item(trip_id: int) -> Any:
     cur = db.execute(
         """
         INSERT INTO itinerary_items
-        (trip_id, day_date, start_time, end_day_date, end_time, price, annotation_offset, connector_length_adjust, title, item_type, place, transport_mode, from_place, to_place, latitude, longitude, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (trip_id, day_date, start_time, end_day_date, end_time, price, annotation_offset, connector_length_adjust, annotation_side, title, item_type, place, transport_mode, from_place, to_place, latitude, longitude, note)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             trip_id,
@@ -931,6 +940,7 @@ def add_item(trip_id: int) -> Any:
             price,
             annotation_offset,
             connector_length_adjust,
+            annotation_side,
             title,
             item_type,
             place,
@@ -972,6 +982,7 @@ def add_item(trip_id: int) -> Any:
             COALESCE(price, 0) AS price,
             COALESCE(annotation_offset, 0) AS annotation_offset,
             COALESCE(connector_length_adjust, 0) AS connector_length_adjust,
+            COALESCE(annotation_side, 'auto') AS annotation_side,
             title,
             item_type,
             place,
@@ -1015,6 +1026,7 @@ def update_item(item_id: int) -> Any:
     price_raw = data.get("price") if "price" in data else existing["price"]
     annotation_offset_raw = data.get("annotation_offset") if "annotation_offset" in data else existing["annotation_offset"]
     connector_length_adjust_raw = data.get("connector_length_adjust") if "connector_length_adjust" in data else existing["connector_length_adjust"]
+    annotation_side_raw = data.get("annotation_side") if "annotation_side" in data else existing["annotation_side"]
     note = (data.get("note") if "note" in data else existing["note"] or "").strip()
 
     if not start_datetime_raw and (not day_date or not start_time):
@@ -1064,6 +1076,10 @@ def update_item(item_id: int) -> Any:
         if parsed_connector_length_adjust is None:
             return jsonify({"error": "connector_length_adjust 必须是数字"}), 400
         connector_length_adjust = parsed_connector_length_adjust
+
+    annotation_side = str(annotation_side_raw or "auto").strip().lower()
+    if annotation_side not in ("auto", "above", "below"):
+        return jsonify({"error": "annotation_side 仅支持 auto/above/below"}), 400
 
     trip = get_trip_or_404(db, int(existing["trip_id"]))
     if not trip:
@@ -1140,7 +1156,7 @@ def update_item(item_id: int) -> Any:
         """
         UPDATE itinerary_items
         SET day_date = ?, start_time = ?, end_day_date = ?, end_time = ?, price = ?, title = ?, item_type = ?,
-            annotation_offset = ?, connector_length_adjust = ?, place = ?, transport_mode = ?, from_place = ?, to_place = ?, latitude = ?, longitude = ?, note = ?
+            annotation_offset = ?, connector_length_adjust = ?, annotation_side = ?, place = ?, transport_mode = ?, from_place = ?, to_place = ?, latitude = ?, longitude = ?, note = ?
         WHERE id = ?
         """,
         (
@@ -1153,6 +1169,7 @@ def update_item(item_id: int) -> Any:
             item_type,
             annotation_offset,
             connector_length_adjust,
+            annotation_side,
             place if place else None,
             transport_mode if transport_mode else None,
             from_place if from_place else None,

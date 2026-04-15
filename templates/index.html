@@ -218,32 +218,27 @@
             <el-row :gutter="10" class="datetime-row">
                 <el-col :span="12">
                     <el-form-item label="开始日期时间">
-                        <el-date-picker
-                            v-model="itemForms.activity.start_datetime"
-                            type="datetime"
-                            format="yyyy-MM-dd HH:mm"
-                            value-format="yyyy-MM-ddTHH:mm"
-                            placeholder="选择开始时间"
-                            style="width: 100%;"
-                        ></el-date-picker>
+                        <el-date-picker v-model="itemForms.activity.start_datetime" type="datetime" format="yyyy-MM-dd HH:mm" value-format="yyyy-MM-ddTHH:mm" placeholder="选择开始时间" style="width: 100%;"></el-date-picker>
                     </el-form-item>
                 </el-col>
                 <el-col :span="12">
                     <el-form-item label="结束日期时间">
-                        <el-date-picker
-                            v-model="itemForms.activity.end_datetime"
-                            type="datetime"
-                            format="yyyy-MM-dd HH:mm"
-                            value-format="yyyy-MM-ddTHH:mm"
-                            placeholder="选择结束时间"
-                            style="width: 100%;"
-                        ></el-date-picker>
+                        <el-date-picker v-model="itemForms.activity.end_datetime" type="datetime" format="yyyy-MM-dd HH:mm" value-format="yyyy-MM-ddTHH:mm" placeholder="选择结束时间" style="width: 100%;"></el-date-picker>
                     </el-form-item>
                 </el-col>
             </el-row>
             <el-collapse v-model="advancedOpen.activity" class="advanced-collapse">
-                <el-collapse-item title="高级配置）" name="advanced">
+                <el-collapse-item title="高级配置" name="advanced">
                     <el-row :gutter="10">
+                        <el-col :span="12">
+                            <el-form-item label="标注在轴上/轴下">
+                                <el-select v-model="itemForms.activity.annotation_side" style="width: 100%;">
+                                    <el-option label="自动" value="auto"></el-option>
+                                    <el-option label="轴上" value="above"></el-option>
+                                    <el-option label="轴下" value="below"></el-option>
+                                </el-select>
+                            </el-form-item>
+                        </el-col>
                         <el-col :span="12">
                             <el-form-item label="标注线长度修正">
                                 <el-input-number v-model="itemForms.activity.connector_length_adjust" :step="1" :min="-60" :max="200" style="width: 100%;"></el-input-number>
@@ -255,7 +250,7 @@
                             </el-form-item>
                         </el-col>
                     </el-row>
-                     </el-collapse-item>
+                </el-collapse-item>
             </el-collapse>
             <el-form-item label="备注"><el-input v-model="itemForms.activity.note"></el-input></el-form-item>
         </el-form>
@@ -277,26 +272,12 @@
             <el-row :gutter="10" class="datetime-row">
                 <el-col :span="12">
                     <el-form-item label="开始日期时间">
-                        <el-date-picker
-                            v-model="itemForms.transport.start_datetime"
-                            type="datetime"
-                            format="yyyy-MM-dd HH:mm"
-                            value-format="yyyy-MM-ddTHH:mm"
-                            placeholder="选择开始时间"
-                            style="width: 100%;"
-                        ></el-date-picker>
+                        <el-date-picker v-model="itemForms.transport.start_datetime" type="datetime" format="yyyy-MM-dd HH:mm" value-format="yyyy-MM-ddTHH:mm" placeholder="选择开始时间" style="width: 100%;"></el-date-picker>
                     </el-form-item>
                 </el-col>
                 <el-col :span="12">
                     <el-form-item label="结束日期时间">
-                        <el-date-picker
-                            v-model="itemForms.transport.end_datetime"
-                            type="datetime"
-                            format="yyyy-MM-dd HH:mm"
-                            value-format="yyyy-MM-ddTHH:mm"
-                            placeholder="选择结束时间"
-                            style="width: 100%;"
-                        ></el-date-picker>
+                        <el-date-picker v-model="itemForms.transport.end_datetime" type="datetime" format="yyyy-MM-dd HH:mm" value-format="yyyy-MM-ddTHH:mm" placeholder="选择结束时间" style="width: 100%;"></el-date-picker>
                     </el-form-item>
                 </el-col>
             </el-row>
@@ -308,6 +289,15 @@
                 <el-collapse-item title="高级配置" name="advanced">
                     <el-row :gutter="10">
                         <el-col :span="12">
+                            <el-form-item label="标注在轴上/轴下">
+                                <el-select v-model="itemForms.transport.annotation_side" style="width: 100%;">
+                                    <el-option label="自动" value="auto"></el-option>
+                                    <el-option label="轴上" value="above"></el-option>
+                                    <el-option label="轴下" value="below"></el-option>
+                                </el-select>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
                             <el-form-item label="标注线长度修正">
                                 <el-input-number v-model="itemForms.transport.connector_length_adjust" :step="1" :min="-60" :max="200" style="width: 100%;"></el-input-number>
                             </el-form-item>
@@ -318,7 +308,7 @@
                             </el-form-item>
                         </el-col>
                     </el-row>
-                    </el-collapse-item>
+                </el-collapse-item>
             </el-collapse>
             <el-form-item label="备注"><el-input v-model="itemForms.transport.note"></el-input></el-form-item>
         </el-form>
@@ -411,6 +401,15 @@
             <el-collapse v-model="advancedOpen.stay" class="advanced-collapse">
                 <el-collapse-item title="高级配置" name="advanced">
                     <el-row :gutter="10">
+                        <el-col :span="12">
+                            <el-form-item label="标注在轴上/轴下">
+                                <el-select v-model="itemForms.stay.annotation_side" style="width: 100%;">
+                                    <el-option label="自动" value="auto"></el-option>
+                                    <el-option label="轴上" value="above"></el-option>
+                                    <el-option label="轴下" value="below"></el-option>
+                                </el-select>
+                            </el-form-item>
+                        </el-col>
                         <el-col :span="12">
                             <el-form-item label="标注线长度修正">
                                 <el-input-number v-model="itemForms.stay.connector_length_adjust" :step="1" :min="-60" :max="200" style="width: 100%;"></el-input-number>
