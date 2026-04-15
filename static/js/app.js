@@ -806,6 +806,11 @@ new window.Vue({
                     chip.classList.toggle('is-active', active);
                     annotation.classList.toggle('is-active', active);
                 };
+                const handleOpenEdit = (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    this.openEditDialog(item);
+                };
                 const handleLeave = (evt) => {
                     const related = evt.relatedTarget;
                     if (related && (chip.contains(related) || annotation.contains(related))) return;
@@ -813,8 +818,10 @@ new window.Vue({
                 };
                 chip.addEventListener('mouseenter', () => setActiveState(true));
                 chip.addEventListener('mouseleave', handleLeave);
+                chip.addEventListener('click', handleOpenEdit);
                 annotation.addEventListener('mouseenter', () => setActiveState(true));
                 annotation.addEventListener('mouseleave', handleLeave);
+                annotation.addEventListener('click', handleOpenEdit);
             });
 
             if (timelineWrap) {

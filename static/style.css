@@ -194,7 +194,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 .trip-btn-meta {
     margin-top: 2px;
     font-size: 12px;
-    color: var(--muted);
+    color: var(--panel);
 }
 
 .empty {
@@ -371,6 +371,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     box-shadow: 0 1px 4px rgba(15, 23, 42, 0.1);
     transform-origin: center;
     transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+    cursor: pointer;
 }
 
 .timeline-event-chip.is-active {
@@ -411,6 +412,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     --label-height: 24px;
     --tooltip-gap: 12px;
     transition: transform 0.18s ease, filter 0.18s ease;
+    cursor: pointer;
 }
 
 .timeline-annotation.above {
