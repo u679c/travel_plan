@@ -425,7 +425,7 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .chip-transport {
-    background: #ffd8b3;
+    background: #ffb3b3;
     border-color: #580101;
     box-shadow: inset 1px 2px 4px 1px rgb(255 255 255), 1px 0px 2px 2px rgb(0 0 0 / 24%);
     color: #9a4b11;
