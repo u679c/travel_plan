@@ -249,6 +249,10 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     margin-bottom: 0;
 }
 
+.advanced-collapse {
+    margin: 6px 0 10px;
+}
+
 .timeline-card {
     overflow: visible;
 }

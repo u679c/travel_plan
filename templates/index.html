@@ -230,6 +230,22 @@
                     </el-form-item>
                 </el-col>
             </el-row>
+            <el-collapse v-model="advancedOpen.activity" class="advanced-collapse">
+                <el-collapse-item title="高级配置）" name="advanced">
+                    <el-row :gutter="10">
+                        <el-col :span="12">
+                            <el-form-item label="标注线长度修正">
+                                <el-input-number v-model="itemForms.activity.connector_length_adjust" :step="1" :min="-60" :max="200" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-form-item label="标注左右修正">
+                                <el-input-number v-model="itemForms.activity.annotation_offset" :step="1" :min="-200" :max="200" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                    </el-row>
+                     </el-collapse-item>
+            </el-collapse>
             <el-form-item label="备注"><el-input v-model="itemForms.activity.note"></el-input></el-form-item>
         </el-form>
         <span slot="footer">
@@ -277,6 +293,22 @@
                 <el-col :span="12"><el-form-item label="出发地"><el-input v-model="itemForms.transport.from_place"></el-input></el-form-item></el-col>
                 <el-col :span="12"><el-form-item label="目的地"><el-input v-model="itemForms.transport.to_place"></el-input></el-form-item></el-col>
             </el-row>
+            <el-collapse v-model="advancedOpen.transport" class="advanced-collapse">
+                <el-collapse-item title="高级配置" name="advanced">
+                    <el-row :gutter="10">
+                        <el-col :span="12">
+                            <el-form-item label="标注线长度修正">
+                                <el-input-number v-model="itemForms.transport.connector_length_adjust" :step="1" :min="-60" :max="200" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-form-item label="标注左右修正">
+                                <el-input-number v-model="itemForms.transport.annotation_offset" :step="1" :min="-200" :max="200" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                    </el-row>
+                    </el-collapse-item>
+            </el-collapse>
             <el-form-item label="备注"><el-input v-model="itemForms.transport.note"></el-input></el-form-item>
         </el-form>
         <span slot="footer">
@@ -368,6 +400,22 @@
                     </el-form-item>
                 </el-col>
             </el-row>
+            <el-collapse v-model="advancedOpen.stay" class="advanced-collapse">
+                <el-collapse-item title="高级配置" name="advanced">
+                    <el-row :gutter="10">
+                        <el-col :span="12">
+                            <el-form-item label="标注线长度修正">
+                                <el-input-number v-model="itemForms.stay.connector_length_adjust" :step="1" :min="-60" :max="200" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                        <el-col :span="12">
+                            <el-form-item label="标注左右修正">
+                                <el-input-number v-model="itemForms.stay.annotation_offset" :step="1" :min="-200" :max="200" style="width: 100%;"></el-input-number>
+                            </el-form-item>
+                        </el-col>
+                    </el-row>
+                     </el-collapse-item>
+            </el-collapse>
             <el-form-item label="备注"><el-input v-model="itemForms.stay.note"></el-input></el-form-item>
         </el-form>
         <span slot="footer">

@@ -43,6 +43,8 @@ class TripItem {
         this.raw = raw || {};
         Object.assign(this, this.raw);
         this.price = Number(this.price) || 0;
+        this.annotation_offset = Number(this.annotation_offset) || 0;
+        this.connector_length_adjust = Number(this.connector_length_adjust) || 0;
     }
 
     resolveEndDayDate() {
@@ -169,6 +171,11 @@ new window.Vue({
                 tripEdit: false,
                 settings: false,
             },
+            advancedOpen: {
+                activity: [],
+                transport: [],
+                stay: [],
+            },
             editingItem: null,
             tripForm: {
                 name: '',
@@ -191,6 +198,8 @@ new window.Vue({
                     start_datetime: '',
                     end_datetime: '',
                     price: 0,
+                    annotation_offset: 0,
+                    connector_length_adjust: 0,
                     place: '',
                     note: '',
                 },
@@ -199,6 +208,8 @@ new window.Vue({
                     start_datetime: '',
                     end_datetime: '',
                     price: 0,
+                    annotation_offset: 0,
+                    connector_length_adjust: 0,
                     from_place: '',
                     to_place: '',
                     title: '',
@@ -209,6 +220,8 @@ new window.Vue({
                     start_datetime: '',
                     end_datetime: '',
                     price: 0,
+                    annotation_offset: 0,
+                    connector_length_adjust: 0,
                     title: '',
                     note: '',
                 },
@@ -320,6 +333,8 @@ new window.Vue({
                     start_datetime: start,
                     end_datetime: end,
                     price: 0,
+                    annotation_offset: 0,
+                    connector_length_adjust: 0,
                     place: '',
                     note: '',
                 };
@@ -330,6 +345,8 @@ new window.Vue({
                     start_datetime: start,
                     end_datetime: end,
                     price: 0,
+                    annotation_offset: 0,
+                    connector_length_adjust: 0,
                     from_place: '',
                     to_place: '',
                     title: '',
@@ -355,10 +372,13 @@ new window.Vue({
                     start_datetime: start,
                     end_datetime: end,
                     price: 0,
+                    annotation_offset: 0,
+                    connector_length_adjust: 0,
                     title: '',
                     note: '',
                 };
             }
+            if (this.advancedOpen[type]) this.advancedOpen[type] = [];
         },
         fillItemFormForEdit(item) {
             const type = item.item_type;
@@ -393,6 +413,8 @@ new window.Vue({
             const form = { ...this.itemForms[type] };
             const payload = { ...form, item_type: type };
             payload.price = Number(payload.price || 0);
+            payload.annotation_offset = Number(payload.annotation_offset || 0);
+            payload.connector_length_adjust = Number(payload.connector_length_adjust || 0);
 
             if (payload.start_datetime) {
                 const start = parseLocalDateTime(payload.start_datetime);
@@ -785,13 +807,16 @@ new window.Vue({
                 const placement = tryPlaceOnSide(entry, preferredSide, labelWidthPct, labelSizePx.height, baseConnector)
                     || tryPlaceOnSide(entry, preferredSide === 'above' ? 'below' : 'above', labelWidthPct, labelSizePx.height, baseConnector)
                     || { side: preferredSide, level: 0, anchorCenter: entry.baseCenter, connectorLength: baseConnector };
-                const connectorLength = placement.connectorLength || (baseConnector + placement.level * connectorStepPx);
+                const connectorLengthAdjust = Number(item.connector_length_adjust || 0);
+                const connectorLength = Math.max(4, (placement.connectorLength || (baseConnector + placement.level * connectorStepPx)) + connectorLengthAdjust);
+                const annotationOffsetPct = toPct(Number(item.annotation_offset || 0));
+                const anchorCenter = Math.max(0.5, Math.min(99.5, placement.anchorCenter + annotationOffsetPct));
                 const labelClearance = connectorLength + 34;
                 if (placement.side === 'above') maxAboveClearance = Math.max(maxAboveClearance, labelClearance);
                 else maxBelowClearance = Math.max(maxBelowClearance, labelClearance);
 
                 annotation.className = `timeline-annotation ${placement.side}`;
-                annotation.style.left = `${placement.anchorCenter}%`;
+                annotation.style.left = `${anchorCenter}%`;
                 annotation.style.top = `${chipTop + Math.round(chipHeight / 2)}px`;
                 annotation.style.setProperty('--connector-length', `${connectorLength}px`);
                 annotation.style.setProperty('--label-height', `${labelSizePx.height}px`);
