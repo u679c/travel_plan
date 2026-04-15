@@ -792,12 +792,27 @@ new window.Vue({
                 annotation.style.left = `${placement.anchorCenter}%`;
                 annotation.style.top = `${chipTop + Math.round(chipHeight / 2)}px`;
                 annotation.style.setProperty('--connector-length', `${connectorLength}px`);
+                annotation.style.setProperty('--label-height', `${labelSizePx.height}px`);
                 annotation.innerHTML = `
                     <div class="timeline-connector"></div>
                     <div class="timeline-label">${labelText}</div>
                     <div class="timeline-tooltip">${detail}</div>
                 `;
                 timelineEvents.appendChild(annotation);
+
+                const setActiveState = (active) => {
+                    chip.classList.toggle('is-active', active);
+                    annotation.classList.toggle('is-active', active);
+                };
+                const handleLeave = (evt) => {
+                    const related = evt.relatedTarget;
+                    if (related && (chip.contains(related) || annotation.contains(related))) return;
+                    setActiveState(false);
+                };
+                chip.addEventListener('mouseenter', () => setActiveState(true));
+                chip.addEventListener('mouseleave', handleLeave);
+                annotation.addEventListener('mouseenter', () => setActiveState(true));
+                annotation.addEventListener('mouseleave', handleLeave);
             });
 
             if (timelineWrap) {
