@@ -117,7 +117,7 @@
     <main class="panel right">
         <section v-if="!currentPlan" class="empty">请选择或创建一个行程</section>
 
-        <section v-else>
+        <section v-else class="plan-layout">
             <div class="detail-head">
                 <h2>[[ tripTitleText ]]</h2>
                 <el-button type="danger" size="mini" @click="deleteTrip">删除行程</el-button>
@@ -151,38 +151,42 @@
             </el-card>
 
             <section class="lists-grid">
-                <el-card class="card" shadow="never">
+                <el-card class="card list-panel-card" shadow="never">
                     <div slot="header" class="card-header-row">
                         <strong>条目列表</strong>
                         <span class="budget-summary">行程总计：[[ formatPrice(totalBudget) ]]元</span>
                     </div>
-                    <div v-if="listItems.length === 0" class="event-meta">暂无活动/交通条目</div>
-                    <div v-else class="event-list">
-                        <div v-for="item in listItems" :key="item.id" class="event-row">
-                            <div>
-                                <div><strong>[[ '[' + itemTypeLabel(item.item_type) + '] ' + item.displayTitle() ]]</strong></div>
-                                <div class="event-meta">[[ itemDetailText(item) ]]</div>
-                            </div>
-                            <div class="item-actions">
-                                <el-button size="mini" @click="openEditDialog(item)">编辑</el-button>
-                                <el-button size="mini" type="danger" plain @click="removeItem(item)">删除</el-button>
+                    <div class="list-panel-scroll">
+                        <div v-if="listItems.length === 0" class="event-meta">暂无活动/交通条目</div>
+                        <div v-else class="event-list">
+                            <div v-for="item in listItems" :key="item.id" class="event-row">
+                                <div>
+                                    <div><strong>[[ '[' + itemTypeLabel(item.item_type) + '] ' + item.displayTitle() ]]</strong></div>
+                                    <div class="event-meta">[[ itemDetailText(item) ]]</div>
+                                </div>
+                                <div class="item-actions">
+                                    <el-button size="mini" @click="openEditDialog(item)">编辑</el-button>
+                                    <el-button size="mini" type="danger" plain @click="removeItem(item)">删除</el-button>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </el-card>
 
-                <el-card class="card" shadow="never">
+                <el-card class="card list-panel-card" shadow="never">
                     <div slot="header"><strong>地址列表</strong></div>
-                    <div v-if="addressItems.length === 0" class="event-meta">暂无地址条目</div>
-                    <div v-else class="event-list">
-                        <div v-for="item in addressItems" :key="item.id" class="event-row">
-                            <div>
-                                <div><strong>[[ '[地址] ' + item.displayTitle() ]]</strong></div>
-                                <div class="event-meta">[[ itemDetailText(item) ]]</div>
-                            </div>
-                            <div class="item-actions">
-                                <el-button size="mini" @click="openEditDialog(item)">编辑</el-button>
-                                <el-button size="mini" type="danger" plain @click="removeItem(item)">删除</el-button>
+                    <div class="list-panel-scroll">
+                        <div v-if="addressItems.length === 0" class="event-meta">暂无地址条目</div>
+                        <div v-else class="event-list">
+                            <div v-for="item in addressItems" :key="item.id" class="event-row">
+                                <div>
+                                    <div><strong>[[ '[地址] ' + item.displayTitle() ]]</strong></div>
+                                    <div class="event-meta">[[ itemDetailText(item) ]]</div>
+                                </div>
+                                <div class="item-actions">
+                                    <el-button size="mini" @click="openEditDialog(item)">编辑</el-button>
+                                    <el-button size="mini" type="danger" plain @click="removeItem(item)">删除</el-button>
+                                </div>
                             </div>
                         </div>
                     </div>
