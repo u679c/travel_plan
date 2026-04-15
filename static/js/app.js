@@ -648,7 +648,7 @@ new window.Vue({
                 if (clipEnd < clipStart) return;
 
                 const left = ((clipStart - windowStart) / totalMinutes) * 100;
-                const width = Math.max(((clipEnd - clipStart) / totalMinutes) * 100, 2.5);
+                const width = ((clipEnd - clipStart) / totalMinutes) * 100;
                 visibleItems.push(new TimelineNode({
                     item,
                     left,
@@ -702,6 +702,7 @@ new window.Vue({
             const connectorStepPx = 8;
             const maxLevels = Math.max(12, visibleItems.length + 4);
             const toPct = (px) => (px / trackWidthPx) * 100;
+            const minChipWidthPct = toPct(6);
             const stepXPct = toPct(stepXPx);
             const measureLabelSizePx = (labelText) => {
                 const measurer = document.createElement('div');
@@ -764,10 +765,11 @@ new window.Vue({
             visibleItems.forEach((entry, idx) => {
                 const { item, left, width, lane } = entry;
                 const chipTop = chipTopForLane(lane);
+                const chipWidth = Math.min(Math.max(width, minChipWidthPct), Math.max(0.2, 100 - left));
                 const chip = document.createElement('div');
                 chip.className = `timeline-event-chip chip-${item.item_type}`;
                 chip.style.left = `${left}%`;
-                chip.style.width = `${width}%`;
+                chip.style.width = `${chipWidth}%`;
                 chip.style.top = `${chipTop}px`;
                 chip.style.height = `${chipHeight}px`;
                 timelineEvents.appendChild(chip);
