@@ -418,22 +418,22 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
 }
 
 .chip-activity {
-    background: #fdffb8;
-    border-color: #a6c1f3;
+    background: #02ff06;
+    border-color: #057433;
     box-shadow: inset 1px 2px 4px 1px rgb(255 255 255), 1px 0px 2px 2px rgb(0 0 0 / 24%);
     color: #1e3a8a;
 }
 
 .chip-transport {
-    background: #b9ffc6;
-    border-color: #f4c18f;
+    background: #ff3030;
+    border-color: #580101;
     box-shadow: inset 1px 2px 4px 1px rgb(255 255 255), 1px 0px 2px 2px rgb(0 0 0 / 24%);
     color: #9a4b11;
 }
 
 .chip-stay {
-    background: #c3ffdd;
-    border-color: #9cd8b1;
+    background: #008cff;
+    border-color: #181d53;
     box-shadow: inset 1px 2px 4px 1px rgb(255 255 255), 1px 0px 2px 2px rgb(0 0 0 / 24%);
     color: #166534;
 }
