@@ -75,6 +75,10 @@ class TripItem {
             const mode = (this.transport_mode || this.title || '').trim();
             return `交通｜${mode || '未命名'}`;
         }
+        if (this.item_type === 'address') {
+            const place = (this.place || this.title || '').trim();
+            return `地址｜${place || '未命名'}`;
+        }
         if (this.item_type === 'stay') {
             const place = (this.place || this.title || '').trim();
             return `住处｜${place || '未命名'}`;
@@ -94,7 +98,9 @@ class TripItem {
             detail += ` | ${this.place || '-'}`;
             if (this.latitude !== null && this.longitude !== null) detail += ` | ${this.latitude}, ${this.longitude}`;
         }
-        detail += ` | ¥${formatPrice(this.price)}`;
+        if (this.item_type !== 'address') {
+            detail += ` | ¥${formatPrice(this.price)}`;
+        }
         if (this.note) detail += ` | ${this.note}`;
         return detail;
     }
@@ -103,6 +109,7 @@ class TripItem {
         const formatPrice = typeof priceFormatter === 'function' ? priceFormatter : (v) => Number(v || 0).toFixed(2);
         let detail = this.formatTimeRange();
         if (this.item_type === 'transport') detail += ` <br/> ${this.transport_mode || ''} <br/> ${this.from_place || ''} → ${this.to_place || ''}`;
+        if (this.item_type === 'address' && this.place) detail += ` <br/> ${this.place}`;
         if ((this.item_type === 'activity' || this.item_type === 'stay') && this.place) detail += ` <br/> ${this.place}`;
         detail += ` <br/> 价格：¥${formatPrice(this.price)}`;
         if (this.note) detail += ` <br/>备注： ${this.note}`;
@@ -156,6 +163,7 @@ new window.Vue({
             sidebarAutoCollapsed: false,
             manualSidebarCollapsed: false,
             overlaySidebarOpen: false,
+            timelineAxis: 'activity',
             trips: [],
             currentTripId: null,
             currentPlan: null,
@@ -270,6 +278,9 @@ new window.Vue({
         totalBudget() {
             return this.sortedItems.reduce((sum, item) => sum + (Number(item.price) || 0), 0);
         },
+        timelineSwitchTooltip() {
+            return this.timelineAxis === 'activity' ? '切换为地址轴' : '切换为活动轴';
+        },
     },
     watch: {
         currentPlan() {
@@ -289,6 +300,10 @@ new window.Vue({
                 return;
             }
             this.manualSidebarCollapsed = !this.manualSidebarCollapsed;
+        },
+        toggleTimelineAxis() {
+            this.timelineAxis = this.timelineAxis === 'activity' ? 'address' : 'activity';
+            this.$nextTick(() => this.renderTimeline());
         },
         showError(message) {
             this.$message.error(message || '操作失败');
@@ -660,7 +675,8 @@ new window.Vue({
 
             const visibleItems = [];
             items.forEach((item) => {
-                if (item.item_type === 'address') return;
+                const inActivityAxis = item.item_type !== 'address';
+                if ((this.timelineAxis === 'activity' && !inActivityAxis) || (this.timelineAxis === 'address' && inActivityAxis)) return;
                 const absRange = item.getAbsRange(days);
                 if (!absRange) return;
                 const { startAbs, endAbs } = absRange;
