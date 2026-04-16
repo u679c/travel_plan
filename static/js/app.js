@@ -169,8 +169,21 @@ new window.Vue({
             trips: [],
             currentTripId: null,
             currentPlan: null,
+            auth: {
+                user: null,
+                loading: true,
+                loginForm: {
+                    username: '',
+                    password: '',
+                    captcha_answer: '',
+                },
+                captcha: {
+                    question: '',
+                },
+            },
             settings: {
                 amap_api_key: '',
+                amap_api_key_new: '',
                 amap_security_key: '',
             },
             dialogs: {
@@ -253,6 +266,12 @@ new window.Vue({
         };
     },
     computed: {
+        isAuthenticated() {
+            return Boolean(this.auth.user);
+        },
+        isAdmin() {
+            return Boolean(this.auth.user && this.auth.user.username === 'u679c');
+        },
         isNarrowScreen() {
             return this.sidebarAutoCollapsed;
         },
@@ -291,8 +310,96 @@ new window.Vue({
         currentPlan() {
             this.$nextTick(() => this.renderTimeline());
         },
+        'auth.loading'(val) {
+            if (!val) this.$nextTick(() => this.renderTimeline());
+        },
     },
     methods: {
+        tripSelectionStorageKey() {
+            const username = this.auth && this.auth.user ? this.auth.user.username : '';
+            if (!username) return null;
+            return `travel_plan_selected_trip_${username}`;
+        },
+        getSavedTripId() {
+            const key = this.tripSelectionStorageKey();
+            if (!key) return null;
+            try {
+                const raw = window.localStorage.getItem(key);
+                if (!raw) return null;
+                const id = Number(raw);
+                return Number.isInteger(id) && id > 0 ? id : null;
+            } catch (_) {
+                return null;
+            }
+        },
+        saveSelectedTripId(tripId) {
+            const key = this.tripSelectionStorageKey();
+            if (!key) return;
+            try {
+                window.localStorage.setItem(key, String(tripId));
+            } catch (_) {
+                // ignore
+            }
+        },
+        async initAuth() {
+            this.auth.loading = true;
+            try {
+                const data = await api('/api/auth/me');
+                this.auth.user = data.user || null;
+                if (this.auth.user) {
+                    await this.loadSettings();
+                    await this.loadTrips();
+                } else {
+                    await this.refreshCaptcha();
+                }
+            } catch (err) {
+                this.showError(err.message);
+            } finally {
+                this.auth.loading = false;
+            }
+        },
+        async refreshCaptcha() {
+            try {
+                const data = await api('/api/auth/captcha');
+                this.auth.captcha.question = data.question || '';
+                this.auth.loginForm.captcha_answer = '';
+            } catch (err) {
+                this.showError(err.message);
+            }
+        },
+        async submitLogin() {
+            try {
+                const payload = { ...this.auth.loginForm };
+                const data = await api('/api/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                });
+                this.auth.user = data.user;
+                this.auth.loginForm.password = '';
+                this.auth.loginForm.captcha_answer = '';
+                await this.loadSettings();
+                await this.loadTrips();
+                this.showSuccess('登录成功');
+            } catch (err) {
+                this.showError(err.message);
+                await this.refreshCaptcha();
+            }
+        },
+        async logout() {
+            this.dialogs.settings = false;
+            try {
+                await api('/api/auth/logout', { method: 'POST' });
+            } catch (_) {
+                // ignore
+            }
+            this.auth.user = null;
+            this.trips = [];
+            this.currentTripId = null;
+            this.currentPlan = null;
+            this.settings = { amap_api_key: '', amap_api_key_new: '', amap_security_key: '' };
+            await this.refreshCaptcha();
+            this.showSuccess('已退出登录');
+        },
         handleResize() {
             this.sidebarAutoCollapsed = window.innerWidth < this.sidebarBreakpoint;
             if (!this.sidebarAutoCollapsed) {
@@ -497,10 +604,19 @@ new window.Vue({
             }
         },
         async loadSettings() {
+            if (!this.isAuthenticated) {
+                this.settings = { amap_api_key: '', amap_api_key_new: '', amap_security_key: '' };
+                return;
+            }
             try {
-                this.settings = await api('/api/settings');
+                const data = await api('/api/settings');
+                this.settings = {
+                    amap_api_key: data.amap_api_key || '',
+                    amap_api_key_new: '',
+                    amap_security_key: data.amap_security_key || '',
+                };
             } catch (_) {
-                this.settings = { amap_api_key: '', amap_security_key: '' };
+                this.settings = { amap_api_key: '', amap_api_key_new: '', amap_security_key: '' };
             }
         },
         openSettingsDialog() {
@@ -510,12 +626,28 @@ new window.Vue({
         },
         async submitSettings() {
             try {
+                const payload = {
+                    amap_api_key: (this.settings.amap_api_key_new || '').trim() || this.settings.amap_api_key || '',
+                    amap_security_key: this.settings.amap_security_key || '',
+                };
                 await api('/api/settings', {
                     method: 'PUT',
-                    body: JSON.stringify(this.settings),
+                    body: JSON.stringify(payload),
                 });
+                this.settings.amap_api_key = payload.amap_api_key;
+                this.settings.amap_api_key_new = '';
                 this.dialogs.settings = false;
                 this.showSuccess('设置已保存');
+            } catch (err) {
+                this.showError(err.message);
+            }
+        },
+        async openAdminUsers() {
+            if (!this.isAdmin) return;
+            try {
+                const data = await api('/api/admin/entry');
+                if (!data.path) throw new Error('管理员入口不可用');
+                window.location.href = data.path;
             } catch (err) {
                 this.showError(err.message);
             }
@@ -585,18 +717,36 @@ new window.Vue({
             }
         },
         async loadTrips() {
-            this.trips = await api('/api/trips');
-            if (this.currentTripId && !this.trips.some((t) => t.id === this.currentTripId)) {
+            if (!this.isAuthenticated) {
+                this.trips = [];
                 this.currentTripId = null;
                 this.currentPlan = null;
+                return;
             }
-            if (!this.currentTripId && this.trips.length > 0) {
-                await this.loadTripPlan(this.trips[0].id);
+            this.trips = await api('/api/trips');
+            const exists = new Set(this.trips.map((t) => t.id));
+            const savedTripId = this.getSavedTripId();
+
+            let targetTripId = null;
+            if (savedTripId && exists.has(savedTripId)) targetTripId = savedTripId;
+            else if (this.currentTripId && exists.has(this.currentTripId)) targetTripId = this.currentTripId;
+            else if (this.trips.length > 0) targetTripId = this.trips[0].id;
+
+            if (!targetTripId) {
+                this.currentTripId = null;
+                this.currentPlan = null;
+                return;
+            }
+
+            if (this.currentTripId !== targetTripId || !this.currentPlan) {
+                await this.loadTripPlan(targetTripId);
             }
         },
         async loadTripPlan(tripId) {
+            if (!this.isAuthenticated) return;
             this.currentTripId = tripId;
             this.currentPlan = await api(`/api/trips/${tripId}/plan`);
+            this.saveSelectedTripId(tripId);
         },
         renderTimeline() {
             const timelineTrack = document.getElementById('timeline-track');
@@ -914,9 +1064,7 @@ new window.Vue({
     mounted() {
         this.handleResize();
         window.addEventListener('resize', this.handleResize);
-        this.loadSettings()
-            .then(() => this.loadTrips())
-            .catch((err) => this.showError(err.message));
+        this.initAuth();
     },
     beforeDestroy() {
         window.removeEventListener('resize', this.handleResize);

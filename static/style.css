@@ -707,6 +707,44 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     justify-content: center;
 }
 
+.settings-user {
+    margin-left: 8px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.auth-page {
+    min-height: calc(100vh - 40px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.auth-card {
+    width: min(460px, 100%);
+}
+
+.right.auth-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.right.auth-only .auth-page {
+    min-height: auto;
+}
+
+.captcha-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.captcha-row .el-input {
+    flex: 1;
+}
+
 .daily-location-list {
     margin-top: 10px;
     display: flex;

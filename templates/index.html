@@ -20,6 +20,7 @@
     ]"
 >
     <el-button
+        v-if="auth.user"
         class="sidebar-toggle"
         circle
         size="mini"
@@ -28,7 +29,7 @@
         @click="toggleSidebar"
     ></el-button>
 
-    <aside :class="['panel', 'left', { collapsed: isSidebarCollapsed, overlay: isNarrowScreen }]">
+    <aside v-if="auth.user" :class="['panel', 'left', { collapsed: isSidebarCollapsed, overlay: isNarrowScreen }]">
         <h1>旅游路线定制</h1>
 
         <el-card class="card" shadow="never">
@@ -112,10 +113,34 @@
         <el-button class="settings-trigger" circle icon="el-icon-setting" @click="openSettingsDialog"></el-button>
     </aside>
 
-    <div v-if="isNarrowScreen && overlaySidebarOpen" class="sidebar-backdrop" @click="overlaySidebarOpen = false"></div>
+    <div v-if="auth.user && isNarrowScreen && overlaySidebarOpen" class="sidebar-backdrop" @click="overlaySidebarOpen = false"></div>
 
-    <main class="panel right">
-        <section v-if="!currentPlan" class="empty">请选择或创建一个行程</section>
+    <main :class="['panel', 'right', { 'auth-only': !auth.loading && !auth.user }]">
+        <section v-if="auth.loading" class="empty">正在加载...</section>
+
+        <section v-else-if="!auth.user" class="auth-page">
+            <el-card class="card auth-card" shadow="never">
+                <div slot="header"><strong>登录旅游路线定制系统</strong></div>
+                <el-form :model="auth.loginForm" label-position="top" size="small">
+                    <el-form-item label="用户名">
+                        <el-input v-model="auth.loginForm.username" autocomplete="username" placeholder="请输入用户名"></el-input>
+                    </el-form-item>
+                    <el-form-item label="密码">
+                        <el-input v-model="auth.loginForm.password" type="password" show-password autocomplete="current-password" placeholder="请输入密码"></el-input>
+                    </el-form-item>
+                    <el-form-item label="验证码">
+                        <div class="captcha-row">
+                            <el-input v-model="auth.loginForm.captcha_answer" placeholder="输入结果"></el-input>
+                            <el-tag type="info">[[ auth.captcha.question ]]</el-tag>
+                            <el-button size="mini" @click="refreshCaptcha">刷新</el-button>
+                        </div>
+                    </el-form-item>
+                    <el-button type="primary" style="width: 100%;" @click="submitLogin">登录</el-button>
+                </el-form>
+            </el-card>
+        </section>
+
+        <section v-else-if="!currentPlan" class="empty">请选择或创建一个行程</section>
 
         <section v-else class="plan-layout">
             <div class="detail-head">
@@ -433,16 +458,26 @@
 
     <el-dialog title="系统设置" :visible.sync="dialogs.settings" width="520px">
         <el-form :model="settings" label-position="top" size="small">
-            <el-form-item label="高德 API Key">
-                <el-input v-model="settings.amap_api_key" placeholder="请输入高德 Web 服务 Key"></el-input>
+            <el-form-item label="高德 API Key 状态">
+                <el-tag :type="settings.amap_api_key ? 'success' : 'info'">
+                    [[ settings.amap_api_key ? '已配置' : '未配置' ]]
+                </el-tag>
+            </el-form-item>
+            <el-form-item label="更新高德 API Key（可选）">
+                <el-input v-model="settings.amap_api_key_new" placeholder="留空则保持不变"></el-input>
             </el-form-item>
             <el-form-item label="高德 Security Key（可选）">
                 <el-input v-model="settings.amap_security_key" placeholder="可选，若启用数字签名再填"></el-input>
             </el-form-item>
         </el-form>
         <span slot="footer" class="settings-footer">
-            <span class="settings-version">v1.4.15-6</span>
             <div>
+                <span class="settings-version">v1.4.16-r1</span>
+                <span class="settings-user" v-if="auth.user">当前用户：[[ auth.user.username ]]</span>
+            </div>
+            <div>
+            <el-button type="danger" plain @click="logout">退出登录</el-button>
+            <el-button v-if="isAdmin" type="warning" plain @click="openAdminUsers">用户管理</el-button>
             <el-button @click="dialogs.settings = false">取消</el-button>
             <el-button type="primary" @click="submitSettings">保存设置</el-button>
             </div>

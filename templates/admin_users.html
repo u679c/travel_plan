@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>管理员用户管理</title>
+    <link rel="stylesheet" href="/static/vendor/element-ui/theme-chalk/index.css" />
+    <link rel="stylesheet" href="/static/admin-users.css" />
+</head>
+<body>
+<div id="admin-app" class="admin-page">
+    <section v-if="loading" class="state-box">正在加载...</section>
+    <section v-else-if="!isAdmin" class="state-box">
+        <p>无权限访问该页面。</p>
+        <el-button type="primary" @click="goBack">返回行程页</el-button>
+    </section>
+    <section v-else class="admin-wrap">
+        <header class="admin-header">
+            <div>
+                <h1>用户管理</h1>
+                <p>当前管理员：[[ auth.user.username ]]</p>
+            </div>
+            <div class="admin-actions">
+                <el-button @click="goBack">返回行程页</el-button>
+                <el-button type="primary" @click="openCreateDialog">新增用户</el-button>
+            </div>
+        </header>
+
+        <div class="table-wrap">
+            <el-table :data="users" border stripe style="width: 100%;">
+                <el-table-column prop="id" label="ID" width="80"></el-table-column>
+                <el-table-column prop="username" label="用户名" min-width="180">
+                    <template slot-scope="scope">
+                        <span>[[ scope.row.username ]]</span>
+                        <el-tag v-if="isSelf(scope.row)" size="mini" type="success" style="margin-left: 8px;">当前登录</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="trip_count" label="行程数" width="100"></el-table-column>
+                <el-table-column label="状态" width="120">
+                    <template slot-scope="scope">
+                        <el-tag :type="scope.row.is_locked ? 'warning' : 'success'">
+                            [[ scope.row.is_locked ? '锁定' : '可删除' ]]
+                        </el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="created_at" label="创建时间" min-width="180"></el-table-column>
+                <el-table-column label="操作" width="170" fixed="right">
+                    <template slot-scope="scope">
+                        <el-button size="mini" @click="openEditDialog(scope.row)">编辑</el-button>
+                        <el-button size="mini" type="danger" plain :disabled="isSelf(scope.row) || scope.row.is_locked" @click="removeUser(scope.row)">删除</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </div>
+    </section>
+
+    <el-dialog :title="editingUserId ? '编辑用户' : '新增用户'" :visible.sync="dialogVisible" width="520px">
+        <el-form :model="form" label-position="top" size="small">
+            <el-form-item label="用户名">
+                <el-input v-model="form.username" placeholder="3~32 个字符"></el-input>
+            </el-form-item>
+            <el-form-item :label="editingUserId ? '新密码（可选）' : '密码'">
+                <el-input v-model="form.password" type="password" show-password placeholder="至少 6 位"></el-input>
+            </el-form-item>
+            <el-form-item label="确认密码">
+                <el-input v-model="form.confirmPassword" type="password" show-password placeholder="请再次输入"></el-input>
+            </el-form-item>
+            <el-form-item label="用户状态">
+                <el-checkbox v-model="form.is_locked">锁定（不可删除）</el-checkbox>
+            </el-form-item>
+        </el-form>
+        <span slot="footer">
+            <el-button @click="dialogVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitUser">保存</el-button>
+        </span>
+    </el-dialog>
+</div>
+
+<script src="/static/vendor/vue/vue.min.js"></script>
+<script src="/static/vendor/element-ui/index.js"></script>
+<script type="module" src="/static/js/admin-users.js"></script>
+</body>
+</html>

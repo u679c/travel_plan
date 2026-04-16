@@ -4,21 +4,27 @@ import hashlib
 import json
 import math
 import os
+import random
+import secrets
 import sqlite3
+from functools import wraps
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
-from flask import Flask, g, jsonify, render_template, request
+from flask import Flask, g, jsonify, redirect, render_template, request, session
+from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "travel_plan.db"
 TZ_OFFSET_HOURS = 8
 AMAP_API_URL = "https://restapi.amap.com/v3/geocode/geo"
+ADMIN_ROUTE_TOKEN_KEY = "admin_route_token"
 
 app = Flask(__name__)
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY", "travel-plan-dev-secret")
 init_done = False
 
 
@@ -50,8 +56,17 @@ def init_db() -> None:
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(
         """
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            is_locked INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS trips (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
             name TEXT NOT NULL,
             start_date TEXT NOT NULL,
             end_date TEXT NOT NULL,
@@ -60,7 +75,8 @@ def init_db() -> None:
             location_name TEXT,
             latitude REAL,
             longitude REAL,
-            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS itinerary_items (
@@ -106,6 +122,10 @@ def init_db() -> None:
         );
         """
     )
+    ensure_column(db, "users", "is_locked", "is_locked INTEGER NOT NULL DEFAULT 0")
+    db.execute("UPDATE users SET is_locked = 0 WHERE is_locked IS NULL")
+    ensure_column(db, "trips", "user_id", "user_id INTEGER")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_trips_user_id ON trips(user_id)")
     ensure_column(db, "trips", "location_name", "location_name TEXT")
     ensure_column(db, "trips", "latitude", "latitude REAL")
     ensure_column(db, "trips", "longitude", "longitude REAL")
@@ -151,6 +171,15 @@ def set_setting_value(key: str, value: str) -> None:
         db.commit()
     finally:
         db.close()
+
+
+def get_admin_route_token() -> str:
+    token = (get_setting_value(ADMIN_ROUTE_TOKEN_KEY) or "").strip()
+    if token:
+        return token
+    token = secrets.token_urlsafe(10).replace("-", "a").replace("_", "b")
+    set_setting_value(ADMIN_ROUTE_TOKEN_KEY, token)
+    return token
 
 
 def date_range(start_date: str, end_date: str) -> list[str]:
@@ -378,50 +407,115 @@ def build_sun_profile(days: list[str], location_map: dict[str, dict[str, Any]]) 
     return profile
 
 
-def get_trip_or_404(db: sqlite3.Connection, trip_id: int) -> sqlite3.Row | None:
+def get_current_user_id() -> int | None:
+    user_id = session.get("user_id")
+    if isinstance(user_id, int) and user_id > 0:
+        return user_id
+    return None
+
+
+def current_user_row(db: sqlite3.Connection) -> sqlite3.Row | None:
+    user_id = get_current_user_id()
+    if not user_id:
+        return None
+    row = db.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not row:
+        session.pop("user_id", None)
+        return None
+    return row
+
+
+def api_login_required(func: Any) -> Any:
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        db = get_db()
+        user = current_user_row(db)
+        if not user:
+            return jsonify({"error": "请先登录"}), 401
+        g.current_user_id = int(user["id"])
+        g.current_username = str(user["username"])
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def api_admin_required(func: Any) -> Any:
+    @api_login_required
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if str(getattr(g, "current_username", "")) != "u679c":
+            return jsonify({"error": "仅管理员可操作"}), 403
+        return func(*args, **kwargs)
+
+    return wrapper
+
+
+def issue_login_captcha() -> dict[str, Any]:
+    a = random.randint(1, 9)
+    b = random.randint(1, 9)
+    op = random.choice(["+", "-"])
+    answer = a + b if op == "+" else a - b
+    session["login_captcha_answer"] = answer
+    return {"question": f"{a} {op} {b} = ?"}
+
+
+def validate_login_captcha(raw_answer: Any) -> bool:
+    expected = session.get("login_captcha_answer")
+    session.pop("login_captcha_answer", None)
+    if expected is None:
+        return False
+    try:
+        return int(str(raw_answer).strip()) == int(expected)
+    except (TypeError, ValueError):
+        return False
+
+
+def get_trip_or_404(db: sqlite3.Connection, trip_id: int, user_id: int) -> sqlite3.Row | None:
     return db.execute(
         """
         SELECT
             id,
+            user_id,
             name,
             start_date,
             end_date,
             COALESCE(start_time, '00:00') AS start_time,
             COALESCE(end_time, '23:59') AS end_time
         FROM trips
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         """,
-        (trip_id,),
+        (trip_id, user_id),
     ).fetchone()
 
 
-def get_item_or_404(db: sqlite3.Connection, item_id: int) -> sqlite3.Row | None:
+def get_item_or_404(db: sqlite3.Connection, item_id: int, user_id: int) -> sqlite3.Row | None:
     return db.execute(
         """
         SELECT
-            id,
-            trip_id,
-            day_date,
-            start_time,
-            COALESCE(end_day_date, day_date) AS end_day_date,
-            end_time,
-            COALESCE(price, 0) AS price,
-            COALESCE(annotation_offset, 0) AS annotation_offset,
-            COALESCE(connector_length_adjust, 0) AS connector_length_adjust,
-            COALESCE(annotation_side, 'auto') AS annotation_side,
-            title,
-            item_type,
-            place,
-            transport_mode,
-            from_place,
-            to_place,
-            latitude,
-            longitude,
-            note
-        FROM itinerary_items
-        WHERE id = ?
+            i.id,
+            i.trip_id,
+            i.day_date,
+            i.start_time,
+            COALESCE(i.end_day_date, i.day_date) AS end_day_date,
+            i.end_time,
+            COALESCE(i.price, 0) AS price,
+            COALESCE(i.annotation_offset, 0) AS annotation_offset,
+            COALESCE(i.connector_length_adjust, 0) AS connector_length_adjust,
+            COALESCE(i.annotation_side, 'auto') AS annotation_side,
+            i.title,
+            i.item_type,
+            i.place,
+            i.transport_mode,
+            i.from_place,
+            i.to_place,
+            i.latitude,
+            i.longitude,
+            i.note
+        FROM itinerary_items i
+        JOIN trips t ON t.id = i.trip_id
+        WHERE i.id = ? AND t.user_id = ?
         """,
-        (item_id,),
+        (item_id, user_id),
     ).fetchone()
 
 
@@ -430,7 +524,67 @@ def index() -> str:
     return render_template("index.html")
 
 
+@app.get("/admin/<token>/users")
+def admin_users_page(token: str) -> Any:
+    db = get_db()
+    user = current_user_row(db)
+    if not user or str(user["username"]) != "u679c":
+        return redirect("/")
+    if token != get_admin_route_token():
+        return redirect("/")
+    return render_template("admin_users.html")
+
+
+@app.get("/api/auth/me")
+def auth_me() -> Any:
+    db = get_db()
+    user = current_user_row(db)
+    if not user:
+        return jsonify({"user": None})
+    return jsonify({"user": {"id": int(user["id"]), "username": str(user["username"])}})
+
+
+@app.get("/api/auth/captcha")
+def auth_captcha() -> Any:
+    return jsonify(issue_login_captcha())
+
+
+@app.post("/api/auth/register")
+def auth_register() -> Any:
+    return jsonify({"error": "系统已关闭注册，请联系管理员创建账号"}), 403
+
+
+@app.post("/api/auth/login")
+def auth_login() -> Any:
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    captcha_answer = data.get("captcha_answer")
+    if not username or not password:
+        return jsonify({"error": "用户名和密码必填"}), 400
+    if not validate_login_captcha(captcha_answer):
+        return jsonify({"error": "验证码错误，请重试"}), 400
+
+    db = get_db()
+    user = db.execute(
+        "SELECT id, username, password_hash FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    if not user or not check_password_hash(str(user["password_hash"]), password):
+        return jsonify({"error": "用户名或密码错误"}), 401
+
+    session["user_id"] = int(user["id"])
+    return jsonify({"user": {"id": int(user["id"]), "username": str(user["username"])}})
+
+
+@app.post("/api/auth/logout")
+def auth_logout() -> Any:
+    session.pop("user_id", None)
+    return jsonify({"ok": True})
+
+
 @app.get("/api/settings")
+@api_login_required
 def get_settings() -> Any:
     return jsonify(
         {
@@ -441,6 +595,7 @@ def get_settings() -> Any:
 
 
 @app.put("/api/settings")
+@api_login_required
 def update_settings() -> Any:
     data = request.get_json(silent=True) or {}
     amap_api_key = (data.get("amap_api_key") or "").strip()
@@ -452,9 +607,135 @@ def update_settings() -> Any:
     return jsonify({"ok": True})
 
 
+@app.get("/api/admin/users")
+@api_admin_required
+def list_admin_users() -> Any:
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT
+            u.id,
+            u.username,
+            COALESCE(u.is_locked, 0) AS is_locked,
+            u.created_at,
+            COUNT(t.id) AS trip_count
+        FROM users u
+        LEFT JOIN trips t ON t.user_id = u.id
+        GROUP BY u.id, u.username, u.is_locked, u.created_at
+        ORDER BY u.id ASC
+        """
+    ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+
+@app.get("/api/admin/entry")
+@api_admin_required
+def get_admin_entry() -> Any:
+    return jsonify({"path": f"/admin/{get_admin_route_token()}/users"})
+
+
+@app.post("/api/admin/users")
+@api_admin_required
+def create_admin_user() -> Any:
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    is_locked = 1 if bool(data.get("is_locked", False)) else 0
+
+    if len(username) < 3 or len(username) > 32:
+        return jsonify({"error": "用户名长度需在 3~32 之间"}), 400
+    if len(password) < 6:
+        return jsonify({"error": "密码长度至少 6 位"}), 400
+
+    db = get_db()
+    existed = db.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
+    if existed:
+        return jsonify({"error": "用户名已存在"}), 400
+
+    cur = db.execute(
+        "INSERT INTO users (username, password_hash, is_locked) VALUES (?, ?, ?)",
+        (username, generate_password_hash(password), is_locked),
+    )
+    db.commit()
+
+    row = db.execute(
+        """
+        SELECT id, username, COALESCE(is_locked, 0) AS is_locked, created_at
+        FROM users
+        WHERE id = ?
+        """,
+        (int(cur.lastrowid),),
+    ).fetchone()
+    return jsonify(dict(row)), 201
+
+
+@app.put("/api/admin/users/<int:user_id>")
+@api_admin_required
+def update_admin_user(user_id: int) -> Any:
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    is_locked = 1 if bool(data.get("is_locked", False)) else 0
+
+    if len(username) < 3 or len(username) > 32:
+        return jsonify({"error": "用户名长度需在 3~32 之间"}), 400
+
+    db = get_db()
+    existing = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not existing:
+        return jsonify({"error": "用户不存在"}), 404
+
+    dup = db.execute("SELECT id FROM users WHERE username = ? AND id <> ?", (username, user_id)).fetchone()
+    if dup:
+        return jsonify({"error": "用户名已存在"}), 400
+
+    if password:
+        if len(password) < 6:
+            return jsonify({"error": "密码长度至少 6 位"}), 400
+        db.execute(
+            "UPDATE users SET username = ?, password_hash = ?, is_locked = ? WHERE id = ?",
+            (username, generate_password_hash(password), is_locked, user_id),
+        )
+    else:
+        db.execute("UPDATE users SET username = ?, is_locked = ? WHERE id = ?", (username, is_locked, user_id))
+    db.commit()
+
+    row = db.execute(
+        """
+        SELECT id, username, COALESCE(is_locked, 0) AS is_locked, created_at
+        FROM users
+        WHERE id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+    return jsonify(dict(row))
+
+
+@app.delete("/api/admin/users/<int:user_id>")
+@api_admin_required
+def delete_admin_user(user_id: int) -> Any:
+    if user_id == int(g.current_user_id):
+        return jsonify({"error": "不能删除当前登录管理员账号"}), 400
+
+    db = get_db()
+    target = db.execute("SELECT id, COALESCE(is_locked, 0) AS is_locked FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not target:
+        return jsonify({"error": "用户不存在"}), 404
+    if int(target["is_locked"]) == 1:
+        return jsonify({"error": "该用户已锁定，不可删除"}), 400
+
+    cur = db.execute("DELETE FROM users WHERE id = ?", (user_id,))
+    db.commit()
+    if cur.rowcount == 0:
+        return jsonify({"error": "用户不存在"}), 404
+    return jsonify({"ok": True})
+
+
 @app.get("/api/trips")
+@api_login_required
 def list_trips() -> Any:
     db = get_db()
+    user_id = int(g.current_user_id)
     rows = db.execute(
         """
         SELECT
@@ -466,13 +747,16 @@ def list_trips() -> Any:
             COALESCE(end_time, '23:59') AS end_time,
             created_at
         FROM trips
+        WHERE user_id = ?
         ORDER BY id DESC
-        """
+        """,
+        (user_id,),
     ).fetchall()
     return jsonify([dict(row) for row in rows])
 
 
 @app.post("/api/trips")
+@api_login_required
 def create_trip() -> Any:
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -509,12 +793,13 @@ def create_trip() -> Any:
         return jsonify({"error": "行程结束时间必须晚于开始时间"}), 400
 
     db = get_db()
+    user_id = int(g.current_user_id)
     cur = db.execute(
         """
-        INSERT INTO trips (name, start_date, end_date, start_time, end_time)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO trips (user_id, name, start_date, end_date, start_time, end_time)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (name, start_date, end_date, start_time.strftime("%H:%M"), end_time.strftime("%H:%M")),
+        (user_id, name, start_date, end_date, start_time.strftime("%H:%M"), end_time.strftime("%H:%M")),
     )
     db.commit()
     trip_id = cur.lastrowid
@@ -529,14 +814,15 @@ def create_trip() -> Any:
             COALESCE(end_time, '23:59') AS end_time,
             created_at
         FROM trips
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         """,
-        (trip_id,),
+        (trip_id, user_id),
     ).fetchone()
     return jsonify(dict(row)), 201
 
 
 @app.put("/api/trips/<int:trip_id>")
+@api_login_required
 def update_trip(trip_id: int) -> Any:
     data = request.get_json(silent=True) or {}
     name = (data.get("name") or "").strip()
@@ -573,11 +859,12 @@ def update_trip(trip_id: int) -> Any:
         return jsonify({"error": "行程结束时间必须晚于开始时间"}), 400
 
     db = get_db()
+    user_id = int(g.current_user_id)
     cur = db.execute(
         """
         UPDATE trips
         SET name = ?, start_date = ?, end_date = ?, start_time = ?, end_time = ?
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         """,
         (
             name,
@@ -586,6 +873,7 @@ def update_trip(trip_id: int) -> Any:
             start_time.strftime("%H:%M"),
             end_time.strftime("%H:%M"),
             trip_id,
+            user_id,
         ),
     )
     db.commit()
@@ -603,17 +891,19 @@ def update_trip(trip_id: int) -> Any:
             COALESCE(end_time, '23:59') AS end_time,
             created_at
         FROM trips
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         """,
-        (trip_id,),
+        (trip_id, user_id),
     ).fetchone()
     return jsonify(dict(row))
 
 
 @app.delete("/api/trips/<int:trip_id>")
+@api_login_required
 def delete_trip(trip_id: int) -> Any:
     db = get_db()
-    cur = db.execute("DELETE FROM trips WHERE id = ?", (trip_id,))
+    user_id = int(g.current_user_id)
+    cur = db.execute("DELETE FROM trips WHERE id = ? AND user_id = ?", (trip_id, user_id))
     db.commit()
     if cur.rowcount == 0:
         return jsonify({"error": "行程不存在"}), 404
@@ -621,9 +911,11 @@ def delete_trip(trip_id: int) -> Any:
 
 
 @app.get("/api/trips/<int:trip_id>/plan")
+@api_login_required
 def get_trip_plan(trip_id: int) -> Any:
     db = get_db()
-    trip = get_trip_or_404(db, trip_id)
+    user_id = int(g.current_user_id)
+    trip = get_trip_or_404(db, trip_id, user_id)
     if not trip:
         return jsonify({"error": "行程不存在"}), 404
 
@@ -691,6 +983,7 @@ def get_trip_plan(trip_id: int) -> Any:
 
 
 @app.post("/api/trips/<int:trip_id>/daily-locations")
+@api_login_required
 def upsert_daily_location(trip_id: int) -> Any:
     data = request.get_json(silent=True) or {}
     day_date = data.get("day_date")
@@ -703,7 +996,8 @@ def upsert_daily_location(trip_id: int) -> Any:
         return jsonify({"error": "day_date, location_name 必填"}), 400
 
     db = get_db()
-    trip = get_trip_or_404(db, trip_id)
+    user_id = int(g.current_user_id)
+    trip = get_trip_or_404(db, trip_id, user_id)
     if not trip:
         return jsonify({"error": "行程不存在"}), 404
 
@@ -750,9 +1044,11 @@ def upsert_daily_location(trip_id: int) -> Any:
 
 
 @app.delete("/api/trips/<int:trip_id>/daily-locations/<day_date>")
+@api_login_required
 def delete_daily_location(trip_id: int, day_date: str) -> Any:
     db = get_db()
-    trip = get_trip_or_404(db, trip_id)
+    user_id = int(g.current_user_id)
+    trip = get_trip_or_404(db, trip_id, user_id)
     if not trip:
         return jsonify({"error": "行程不存在"}), 404
 
@@ -768,6 +1064,7 @@ def delete_daily_location(trip_id: int, day_date: str) -> Any:
 
 
 @app.post("/api/geocode")
+@api_login_required
 def geocode_address() -> Any:
     data = request.get_json(silent=True) or {}
     address = (data.get("address") or "").strip()
@@ -782,6 +1079,7 @@ def geocode_address() -> Any:
 
 
 @app.post("/api/trips/<int:trip_id>/items")
+@api_login_required
 def add_item(trip_id: int) -> Any:
     data = request.get_json(silent=True) or {}
     start_datetime_raw = data.get("start_datetime")
@@ -858,7 +1156,8 @@ def add_item(trip_id: int) -> Any:
         return jsonify({"error": "annotation_side 仅支持 auto/above/below"}), 400
 
     db = get_db()
-    trip = get_trip_or_404(db, trip_id)
+    user_id = int(g.current_user_id)
+    trip = get_trip_or_404(db, trip_id, user_id)
     if not trip:
         return jsonify({"error": "行程不存在"}), 404
 
@@ -1001,10 +1300,12 @@ def add_item(trip_id: int) -> Any:
 
 
 @app.put("/api/items/<int:item_id>")
+@api_login_required
 def update_item(item_id: int) -> Any:
     data = request.get_json(silent=True) or {}
     db = get_db()
-    existing = get_item_or_404(db, item_id)
+    user_id = int(g.current_user_id)
+    existing = get_item_or_404(db, item_id, user_id)
     if not existing:
         return jsonify({"error": "活动不存在"}), 404
 
@@ -1081,7 +1382,7 @@ def update_item(item_id: int) -> Any:
     if annotation_side not in ("auto", "above", "below"):
         return jsonify({"error": "annotation_side 仅支持 auto/above/below"}), 400
 
-    trip = get_trip_or_404(db, int(existing["trip_id"]))
+    trip = get_trip_or_404(db, int(existing["trip_id"]), user_id)
     if not trip:
         return jsonify({"error": "行程不存在"}), 404
 
@@ -1182,13 +1483,18 @@ def update_item(item_id: int) -> Any:
     )
     db.commit()
 
-    row = get_item_or_404(db, item_id)
+    row = get_item_or_404(db, item_id, user_id)
     return jsonify(dict(row))
 
 
 @app.delete("/api/items/<int:item_id>")
+@api_login_required
 def delete_item(item_id: int) -> Any:
     db = get_db()
+    user_id = int(g.current_user_id)
+    existing = get_item_or_404(db, item_id, user_id)
+    if not existing:
+        return jsonify({"error": "活动不存在"}), 404
     cur = db.execute("DELETE FROM itinerary_items WHERE id = ?", (item_id,))
     db.commit()
     if cur.rowcount == 0:
