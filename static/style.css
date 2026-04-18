@@ -289,6 +289,21 @@ input:not(.el-input__inner):not(.el-textarea__inner), select:not(.el-select__inp
     justify-content: space-between;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+}
+
+.timeline-nav-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.timeline-zoom-text {
+    font-size: 12px;
+    color: #334155;
+    min-width: 60px;
+    text-align: right;
 }
 
 .timeline-axis-switch i {

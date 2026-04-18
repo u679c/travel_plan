@@ -162,6 +162,14 @@
                     <div></div>
                     <div class="timeline-head-right">
                         <div class="sun-meta">[[ sunMetaText ]]</div>
+                        <div class="timeline-nav-tools">
+                            <el-button size="mini" icon="el-icon-arrow-left" @click="panTimelineByRatio(-0.25)"></el-button>
+                            <el-button size="mini" icon="el-icon-arrow-right" @click="panTimelineByRatio(0.25)"></el-button>
+                            <el-button size="mini" icon="el-icon-zoom-in" @click="zoomTimeline(1.25)"></el-button>
+                            <el-button size="mini" icon="el-icon-zoom-out" @click="zoomTimeline(0.8)"></el-button>
+                            <el-button size="mini" @click="resetTimelineView">重置</el-button>
+                            <span class="timeline-zoom-text">[[ timelineZoomText ]]</span>
+                        </div>
                         <el-tooltip :content="timelineSwitchTooltip" placement="top">
                             <el-button
                                 class="timeline-axis-switch"
@@ -173,7 +181,7 @@
                         </el-tooltip>
                     </div>
                 </div>
-                <div class="timeline-slab">
+                <div class="timeline-slab" @wheel.prevent="onTimelineWheel">
                     <div id="timeline-day-blocks" class="timeline-day-blocks"></div>
                     <div id="timeline-date-band" class="timeline-date-band"></div>
                     <div class="timeline-wrap">

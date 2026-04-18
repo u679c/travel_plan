@@ -120,13 +120,14 @@ class TripItem {
 }
 
 class TimelineNode {
-    constructor({ item, left, width, clipStart, clipEnd, lane }) {
+    constructor({ item, left, width, clipStart, clipEnd, lane, orderIndex }) {
         this.item = item;
         this.left = left;
         this.width = width;
         this.clipStart = clipStart;
         this.clipEnd = clipEnd;
         this.lane = lane || 0;
+        this.orderIndex = Number.isInteger(orderIndex) ? orderIndex : 0;
 
         const center = left + width / 2;
         this.baseCenter = Math.max(7, Math.min(center, 93));
@@ -166,6 +167,18 @@ new window.Vue({
             manualSidebarCollapsed: false,
             overlaySidebarOpen: false,
             timelineAxis: 'activity',
+            timelineView: {
+                zoom: 1,
+                minZoom: 1,
+                maxZoom: 12,
+                centerRatio: 0.5,
+            },
+            timelineLeftPaddingMinutes: 180,
+            timelineLayoutLock: {
+                trackHeight: null,
+                topMargin: null,
+                bottomMargin: null,
+            },
             trips: [],
             currentTripId: null,
             currentPlan: null,
@@ -305,9 +318,14 @@ new window.Vue({
         timelineSwitchTooltip() {
             return this.timelineAxis === 'activity' ? '切换为地址轴' : '切换为活动轴';
         },
+        timelineZoomText() {
+            return `${this.timelineView.zoom.toFixed(1)}x`;
+        },
     },
     watch: {
         currentPlan() {
+            this.resetTimelineView();
+            this.resetTimelineLayoutLock();
             this.$nextTick(() => this.renderTimeline());
         },
         'auth.loading'(val) {
@@ -315,6 +333,112 @@ new window.Vue({
         },
     },
     methods: {
+        getTimelineBaseRange() {
+            if (!this.currentPlan) return null;
+            const rawStart = Number(this.currentPlan.timeline_start_abs_minutes);
+            const end = Number(this.currentPlan.timeline_end_abs_minutes);
+            if (!Number.isFinite(rawStart) || !Number.isFinite(end) || end <= rawStart) return null;
+            const leftPad = Math.max(0, Number(this.timelineLeftPaddingMinutes) || 0);
+            const start = Math.max(0, rawStart - leftPad);
+            if (end <= start) return null;
+            return { start, end, total: end - start };
+        },
+        getTimelineViewRange() {
+            const base = this.getTimelineBaseRange();
+            if (!base) return null;
+            const zoom = Math.min(this.timelineView.maxZoom, Math.max(this.timelineView.minZoom, Number(this.timelineView.zoom) || 1));
+            const visible = Math.max(30, base.total / zoom);
+            const movable = Math.max(0, base.total - visible);
+            const centerRatio = Math.max(0, Math.min(1, Number(this.timelineView.centerRatio) || 0.5));
+            const start = base.start + movable * centerRatio;
+            const end = start + visible;
+            return { start, end, total: visible, zoom };
+        },
+        setTimelineZoom(zoom, anchorRatio) {
+            const base = this.getTimelineBaseRange();
+            const current = this.getTimelineViewRange();
+            if (!base || !current) return;
+            const nextZoom = Math.min(this.timelineView.maxZoom, Math.max(this.timelineView.minZoom, zoom));
+            if (!Number.isFinite(nextZoom)) return;
+            const nextVisible = Math.max(30, base.total / nextZoom);
+            const safeAnchor = Math.max(0, Math.min(1, Number(anchorRatio)));
+            const anchorAbs = current.start + current.total * safeAnchor;
+            const nextStartRaw = anchorAbs - nextVisible * safeAnchor;
+            const minStart = base.start;
+            const maxStart = base.end - nextVisible;
+            const nextStart = Math.max(minStart, Math.min(maxStart, nextStartRaw));
+            const movable = Math.max(1, base.total - nextVisible);
+            this.timelineView.zoom = nextZoom;
+            this.timelineView.centerRatio = (nextStart - base.start) / movable;
+            this.$nextTick(() => this.renderTimeline());
+        },
+        zoomTimeline(factor) {
+            const currentZoom = Number(this.timelineView.zoom) || 1;
+            this.setTimelineZoom(currentZoom * factor, 0.5);
+        },
+        panTimelineByRatio(deltaRatio) {
+            const view = this.getTimelineViewRange();
+            const base = this.getTimelineBaseRange();
+            if (!view || !base) return;
+            const movable = Math.max(0, base.total - view.total);
+            if (movable <= 0) return;
+            const deltaMinutes = view.total * deltaRatio;
+            const currentStart = base.start + movable * this.timelineView.centerRatio;
+            const nextStart = Math.max(base.start, Math.min(base.end - view.total, currentStart + deltaMinutes));
+            this.timelineView.centerRatio = (nextStart - base.start) / movable;
+            this.$nextTick(() => this.renderTimeline());
+        },
+        panTimelineByPixels(deltaX, viewportWidth) {
+            const view = this.getTimelineViewRange();
+            const base = this.getTimelineBaseRange();
+            const width = Number(viewportWidth) || 0;
+            if (!view || !base || width <= 0) return;
+            const movable = Math.max(0, base.total - view.total);
+            if (movable <= 0) return;
+            const deltaMinutes = (deltaX / width) * view.total;
+            const currentStart = base.start + movable * this.timelineView.centerRatio;
+            const nextStart = Math.max(base.start, Math.min(base.end - view.total, currentStart + deltaMinutes));
+            this.timelineView.centerRatio = (nextStart - base.start) / movable;
+            this.$nextTick(() => this.renderTimeline());
+        },
+        onTimelineWheel(evt) {
+            if (!this.currentPlan) return;
+            const slab = evt.currentTarget;
+            const rect = slab && slab.getBoundingClientRect ? slab.getBoundingClientRect() : null;
+            const width = rect && rect.width > 0 ? rect.width : 0;
+            const anchorRatio = rect && rect.width > 0
+                ? Math.max(0, Math.min(1, (evt.clientX - rect.left) / rect.width))
+                : 0.5;
+
+            // Trackpad pinch usually carries ctrlKey=true on wheel events.
+            if (evt.ctrlKey) {
+                const zoomFactor = Math.exp(-evt.deltaY * 0.0025);
+                this.setTimelineZoom((Number(this.timelineView.zoom) || 1) * zoomFactor, anchorRatio);
+                return;
+            }
+
+            if (Math.abs(evt.deltaX) > 0.5) {
+                this.panTimelineByPixels(evt.deltaX, width);
+                return;
+            }
+
+            if (evt.shiftKey) {
+                this.panTimelineByPixels(evt.deltaY, width);
+                return;
+            }
+
+            const zoomFactor = evt.deltaY > 0 ? 0.9 : 1.1;
+            this.setTimelineZoom((Number(this.timelineView.zoom) || 1) * zoomFactor, anchorRatio);
+        },
+        resetTimelineView() {
+            this.timelineView.zoom = 1;
+            this.timelineView.centerRatio = 0.5;
+        },
+        resetTimelineLayoutLock() {
+            this.timelineLayoutLock.trackHeight = null;
+            this.timelineLayoutLock.topMargin = null;
+            this.timelineLayoutLock.bottomMargin = null;
+        },
         tripSelectionStorageKey() {
             const username = this.auth && this.auth.user ? this.auth.user.username : '';
             if (!username) return null;
@@ -415,6 +539,7 @@ new window.Vue({
         },
         toggleTimelineAxis() {
             this.timelineAxis = this.timelineAxis === 'activity' ? 'address' : 'activity';
+            this.resetTimelineLayoutLock();
             this.$nextTick(() => this.renderTimeline());
         },
         showError(message) {
@@ -771,9 +896,11 @@ new window.Vue({
             if (!this.currentPlan) return;
 
             const days = this.currentPlan.days;
-            const windowStart = this.currentPlan.timeline_start_abs_minutes;
-            const windowEnd = this.currentPlan.timeline_end_abs_minutes;
-            const totalMinutes = this.currentPlan.total_minutes;
+            const viewRange = this.getTimelineViewRange();
+            if (!viewRange) return;
+            const windowStart = viewRange.start;
+            const windowEnd = viewRange.end;
+            const totalMinutes = viewRange.total;
             const items = this.sortedItems;
 
             timelineTrack.style.background = buildTimelineGradient(this.currentPlan.sun_profile, windowStart, windowEnd);
@@ -816,7 +943,12 @@ new window.Vue({
                 timelineDateBand.appendChild(dateLabel);
             }
 
-            const tickStep = 360; // 6 hours
+            let tickStep = 360;
+            if (totalMinutes <= 12 * 60) tickStep = 60;
+            else if (totalMinutes <= 24 * 60) tickStep = 120;
+            else if (totalMinutes <= 3 * 24 * 60) tickStep = 180;
+            else if (totalMinutes <= 7 * 24 * 60) tickStep = 360;
+            else tickStep = 720;
             const firstTick = Math.ceil(windowStart / tickStep) * tickStep;
             for (let abs = firstTick; abs <= windowEnd; abs += tickStep) {
                 const left = ((abs - windowStart) / totalMinutes) * 100;
@@ -832,36 +964,26 @@ new window.Vue({
                 timelineScale.appendChild(tick);
             }
 
-            const visibleItems = [];
+            const axisEntries = [];
             items.forEach((item) => {
                 const inActivityAxis = item.item_type !== 'address';
                 if ((this.timelineAxis === 'activity' && !inActivityAxis) || (this.timelineAxis === 'address' && inActivityAxis)) return;
                 const absRange = item.getAbsRange(days);
                 if (!absRange) return;
                 const { startAbs, endAbs } = absRange;
-
-                const clipStart = Math.max(startAbs, windowStart);
-                const clipEnd = Math.min(endAbs, windowEnd);
-                if (clipEnd < clipStart) return;
-
-                const left = ((clipStart - windowStart) / totalMinutes) * 100;
-                const width = ((clipEnd - clipStart) / totalMinutes) * 100;
-                visibleItems.push(new TimelineNode({
-                    item,
-                    left,
-                    width,
-                    clipStart,
-                    clipEnd,
-                    lane: 0,
-                }));
+                axisEntries.push({ item, startAbs, endAbs, lane: 0, orderIndex: 0 });
             });
 
-            visibleItems.sort((a, b) => a.clipStart - b.clipStart);
+            axisEntries.sort((a, b) => {
+                if (a.startAbs !== b.startAbs) return a.startAbs - b.startAbs;
+                if (a.endAbs !== b.endAbs) return a.endAbs - b.endAbs;
+                return String(a.item.id || '').localeCompare(String(b.item.id || ''));
+            });
             const laneEnds = [];
-            visibleItems.forEach((entry) => {
+            axisEntries.forEach((entry, index) => {
                 let assignedLane = -1;
                 for (let i = 0; i < laneEnds.length; i += 1) {
-                    if (entry.clipStart >= laneEnds[i]) {
+                    if (entry.startAbs >= laneEnds[i]) {
                         assignedLane = i;
                         break;
                     }
@@ -871,7 +993,27 @@ new window.Vue({
                     assignedLane = laneEnds.length - 1;
                 }
                 entry.lane = assignedLane;
-                laneEnds[assignedLane] = Math.max(laneEnds[assignedLane], entry.clipEnd);
+                entry.orderIndex = index;
+                laneEnds[assignedLane] = Math.max(laneEnds[assignedLane], entry.endAbs);
+            });
+
+            const visibleItems = [];
+            axisEntries.forEach((entry) => {
+                const clipStart = Math.max(entry.startAbs, windowStart);
+                const clipEnd = Math.min(entry.endAbs, windowEnd);
+                if (clipEnd < clipStart) return;
+
+                const left = ((clipStart - windowStart) / totalMinutes) * 100;
+                const width = ((clipEnd - clipStart) / totalMinutes) * 100;
+                visibleItems.push(new TimelineNode({
+                    item: entry.item,
+                    left,
+                    width,
+                    clipStart,
+                    clipEnd,
+                    lane: entry.lane,
+                    orderIndex: entry.orderIndex,
+                }));
             });
 
             const laneCount = Math.max(1, laneEnds.length);
@@ -880,10 +1022,14 @@ new window.Vue({
             const trackPaddingTop = 4;
             const trackPaddingBottom = 4;
             const flippedConnectorExtraFixedPx = -10;
-            const trackHeight = Math.max(
+            const computedTrackHeight = Math.max(
                 20,
                 trackPaddingTop + laneCount * chipHeight + (laneCount - 1) * laneGap + trackPaddingBottom,
             );
+            const isBaseZoom = Math.abs((Number(this.timelineView.zoom) || 1) - 1) < 1e-6;
+            const trackHeight = (!isBaseZoom && Number.isFinite(this.timelineLayoutLock.trackHeight))
+                ? this.timelineLayoutLock.trackHeight
+                : computedTrackHeight;
             const chipTopForLane = (lane) => {
                 if (laneCount <= 1) return Math.round((trackHeight - chipHeight) / 2);
                 return trackPaddingTop + lane * (chipHeight + laneGap);
@@ -979,7 +1125,8 @@ new window.Vue({
                 const annotation = document.createElement('div');
                 let preferredSide;
                 const autoSide = !['above', 'below'].includes(item.annotation_side);
-                const naturalAutoSide = entry.preferredSide(idx, laneCount);
+                const stableIndex = Number.isInteger(entry.orderIndex) ? entry.orderIndex : idx;
+                const naturalAutoSide = entry.preferredSide(stableIndex, laneCount);
                 let laneAlternatedSide = false;
                 if (['above', 'below'].includes(item.annotation_side)) {
                     preferredSide = item.annotation_side;
@@ -1054,8 +1201,19 @@ new window.Vue({
             });
 
             if (timelineWrap) {
-                const topMargin = Math.max(16, Math.ceil(maxAboveClearance + 2));
-                const bottomMargin = Math.max(16, Math.ceil(maxBelowClearance + 2));
+                let topMargin = Math.max(16, Math.ceil(maxAboveClearance + 2));
+                let bottomMargin = Math.max(16, Math.ceil(maxBelowClearance + 2));
+                if (isBaseZoom) {
+                    this.timelineLayoutLock.trackHeight = computedTrackHeight;
+                    this.timelineLayoutLock.topMargin = topMargin;
+                    this.timelineLayoutLock.bottomMargin = bottomMargin;
+                } else if (
+                    Number.isFinite(this.timelineLayoutLock.topMargin)
+                    && Number.isFinite(this.timelineLayoutLock.bottomMargin)
+                ) {
+                    topMargin = this.timelineLayoutLock.topMargin;
+                    bottomMargin = this.timelineLayoutLock.bottomMargin;
+                }
                 timelineWrap.style.setProperty('--timeline-margin-top', `${topMargin}px`);
                 timelineWrap.style.setProperty('--timeline-margin-bottom', `${bottomMargin}px`);
             }
