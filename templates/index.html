@@ -239,7 +239,7 @@
         </section>
     </main>
 
-    <el-dialog :title="dialogTitle('activity')" :visible.sync="dialogs.activity" width="760px" @close="closeItemDialog('activity')">
+    <el-dialog :title="dialogTitle('activity')" :visible.sync="dialogs.activity" :width="dialogWideWidth" :top="dialogTop" custom-class="responsive-dialog" @close="closeItemDialog('activity')">
         <el-form :model="itemForms.activity" label-position="top" size="small">
             <el-row :gutter="10">
                 <el-col :span="12"><el-form-item label="标题"><el-input v-model="itemForms.activity.title"></el-input></el-form-item></el-col>
@@ -293,7 +293,7 @@
         </span>
     </el-dialog>
 
-    <el-dialog :title="dialogTitle('transport')" :visible.sync="dialogs.transport" width="760px" @close="closeItemDialog('transport')">
+    <el-dialog :title="dialogTitle('transport')" :visible.sync="dialogs.transport" :width="dialogWideWidth" :top="dialogTop" custom-class="responsive-dialog" @close="closeItemDialog('transport')">
         <el-form :model="itemForms.transport" label-position="top" size="small">
             <el-row :gutter="10">
                 <el-col :span="12"><el-form-item label="交通方式"><el-input v-model="itemForms.transport.transport_mode"></el-input></el-form-item></el-col>
@@ -351,7 +351,7 @@
         </span>
     </el-dialog>
 
-    <el-dialog :title="dialogTitle('address')" :visible.sync="dialogs.address" width="760px" @close="closeItemDialog('address')">
+    <el-dialog :title="dialogTitle('address')" :visible.sync="dialogs.address" :width="dialogWideWidth" :top="dialogTop" custom-class="responsive-dialog" @close="closeItemDialog('address')">
         <el-form :model="itemForms.address" label-position="top" size="small">
             <el-row :gutter="10">
                 <el-col :span="12"><el-form-item label="地址"><el-input v-model="itemForms.address.place"></el-input></el-form-item></el-col>
@@ -396,7 +396,7 @@
         </span>
     </el-dialog>
 
-    <el-dialog :title="dialogTitle('stay')" :visible.sync="dialogs.stay" width="760px" @close="closeItemDialog('stay')">
+    <el-dialog :title="dialogTitle('stay')" :visible.sync="dialogs.stay" :width="dialogWideWidth" :top="dialogTop" custom-class="responsive-dialog" @close="closeItemDialog('stay')">
         <el-form :model="itemForms.stay" label-position="top" size="small">
             <el-row :gutter="10">
                 <el-col :span="12"><el-form-item label="住处名称(可选)"><el-input v-model="itemForms.stay.title"></el-input></el-form-item></el-col>
@@ -464,7 +464,7 @@
         </span>
     </el-dialog>
 
-    <el-dialog title="系统设置" :visible.sync="dialogs.settings" width="520px">
+    <el-dialog title="系统设置" :visible.sync="dialogs.settings" :width="dialogNarrowWidth" :top="dialogTop" custom-class="responsive-dialog">
         <el-form :model="settings" label-position="top" size="small">
             <el-form-item label="高德 API Key 状态">
                 <el-tag :type="settings.amap_api_key ? 'success' : 'info'">
@@ -492,7 +492,7 @@
         </span>
     </el-dialog>
 
-    <el-dialog title="编辑行程" :visible.sync="dialogs.tripEdit" width="560px">
+    <el-dialog title="编辑行程" :visible.sync="dialogs.tripEdit" :width="dialogMediumWidth" :top="dialogTop" custom-class="responsive-dialog">
         <el-form :model="tripEditForm" label-position="top" size="small">
             <el-form-item label="行程名">
                 <el-input v-model="tripEditForm.name"></el-input>

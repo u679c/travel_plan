@@ -162,6 +162,7 @@ new window.Vue({
     delimiters: ['[[', ']]'],
     data() {
         return {
+            viewportWidth: typeof window !== 'undefined' ? window.innerWidth : 1280,
             sidebarBreakpoint: 1200,
             sidebarAutoCollapsed: false,
             manualSidebarCollapsed: false,
@@ -179,6 +180,7 @@ new window.Vue({
                 topMargin: null,
                 bottomMargin: null,
             },
+            timelineDocClickHandler: null,
             trips: [],
             currentTripId: null,
             currentPlan: null,
@@ -287,6 +289,21 @@ new window.Vue({
         },
         isNarrowScreen() {
             return this.sidebarAutoCollapsed;
+        },
+        isCompactDialogScreen() {
+            return this.viewportWidth <= 820;
+        },
+        dialogTop() {
+            return this.isCompactDialogScreen ? '3vh' : '15vh';
+        },
+        dialogWideWidth() {
+            return this.isCompactDialogScreen ? '96vw' : '760px';
+        },
+        dialogMediumWidth() {
+            return this.isCompactDialogScreen ? '96vw' : '560px';
+        },
+        dialogNarrowWidth() {
+            return this.isCompactDialogScreen ? '96vw' : '520px';
         },
         isSidebarCollapsed() {
             if (this.isNarrowScreen) return !this.overlaySidebarOpen;
@@ -525,6 +542,7 @@ new window.Vue({
             this.showSuccess('已退出登录');
         },
         handleResize() {
+            this.viewportWidth = window.innerWidth;
             this.sidebarAutoCollapsed = window.innerWidth < this.sidebarBreakpoint;
             if (!this.sidebarAutoCollapsed) {
                 this.overlaySidebarOpen = false;
@@ -882,6 +900,10 @@ new window.Vue({
             const timelineDateBand = document.getElementById('timeline-date-band');
             const timelineWrap = timelineTrack ? timelineTrack.closest('.timeline-wrap') : null;
             if (!timelineTrack || !timelineEvents || !timelineDayLines || !timelineScale || !timelineDateBand || !timelineDayBlocks) return;
+            if (this.timelineDocClickHandler) {
+                document.removeEventListener('click', this.timelineDocClickHandler, true);
+                this.timelineDocClickHandler = null;
+            }
 
             timelineEvents.innerHTML = '';
             timelineScale.innerHTML = '';
@@ -1106,9 +1128,12 @@ new window.Vue({
                 return null;
             };
             const laneLastPlacedSide = new Map();
+            let activeClickKey = null;
+            let activeClickResetter = null;
 
             visibleItems.forEach((entry, idx) => {
                 const { item, left, width, lane } = entry;
+                const itemKey = `${item.item_type}:${item.id}`;
                 const chipTop = chipTopForLane(lane);
                 const chipWidth = Math.min(Math.max(width, minChipWidthPct), Math.max(0.2, 100 - left));
                 const chip = document.createElement('div');
@@ -1182,23 +1207,42 @@ new window.Vue({
                     chip.classList.toggle('is-active', active);
                     annotation.classList.toggle('is-active', active);
                 };
-                const handleOpenEdit = (evt) => {
-                    evt.preventDefault();
-                    evt.stopPropagation();
-                    this.openEditDialog(item);
-                };
                 const handleLeave = (evt) => {
                     const related = evt.relatedTarget;
                     if (related && (chip.contains(related) || annotation.contains(related))) return;
+                    if (activeClickKey === itemKey) return;
                     setActiveState(false);
+                };
+                const handleTimelineClick = (evt) => {
+                    evt.preventDefault();
+                    evt.stopPropagation();
+                    if (activeClickKey === itemKey) {
+                        this.openEditDialog(item);
+                        return;
+                    }
+                    if (activeClickResetter && activeClickResetter !== setActiveState) {
+                        activeClickResetter(false);
+                    }
+                    setActiveState(true);
+                    activeClickKey = itemKey;
+                    activeClickResetter = setActiveState;
                 };
                 chip.addEventListener('mouseenter', () => setActiveState(true));
                 chip.addEventListener('mouseleave', handleLeave);
-                chip.addEventListener('click', handleOpenEdit);
+                chip.addEventListener('click', handleTimelineClick);
                 annotation.addEventListener('mouseenter', () => setActiveState(true));
                 annotation.addEventListener('mouseleave', handleLeave);
-                annotation.addEventListener('click', handleOpenEdit);
+                annotation.addEventListener('click', handleTimelineClick);
             });
+
+            this.timelineDocClickHandler = (evt) => {
+                if (!timelineEvents.contains(evt.target)) {
+                    if (activeClickResetter) activeClickResetter(false);
+                    activeClickKey = null;
+                    activeClickResetter = null;
+                }
+            };
+            document.addEventListener('click', this.timelineDocClickHandler, true);
 
             if (timelineWrap) {
                 let topMargin = Math.max(16, Math.ceil(maxAboveClearance + 2));
@@ -1225,6 +1269,10 @@ new window.Vue({
         this.initAuth();
     },
     beforeDestroy() {
+        if (this.timelineDocClickHandler) {
+            document.removeEventListener('click', this.timelineDocClickHandler, true);
+            this.timelineDocClickHandler = null;
+        }
         window.removeEventListener('resize', this.handleResize);
     },
 });
